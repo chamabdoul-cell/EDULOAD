@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EduLoad</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:    #0f0e0a;
+  --paper:  #f5f2eb;
+  --cream:  #ede8db;
+  --warm:   #d4c9ad;
+  --accent: #c8430b;
+  --gold:   #b89435;
+  --teal:   #1a6b6b;
+  --muted:  #7a7060;
+  --panel:  #1a1814;
+  --border: #d0c8b4;
+  --r:      6px;
+}
+
+/* ── Dark mode ───────────────────────────────────────────── */
+[data-theme="dark"] {
+  --ink:    #e8e3d8;
+  --paper:  #1a1814;
+  --cream:  #222018;
+  --warm:   #3a3628;
+  --border: #3a3628;
+  --muted:  #8a8070;
+  --panel:  #0f0e0a;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: 'Lora', Georgia, serif;
+  background: var(--paper);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-size: 15px;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+header {
+  background: var(--panel);
+  color: #f0ebe0;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 58px;
+  border-bottom: 2px solid var(--accent);
+  flex-shrink: 0;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-dot { color: var(--accent); }
+.logo-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--warm);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.hdr-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tool-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid;
+  cursor: default;
+}
+.tool-badge.ok  { border-color: #3d9b6a; color: #3d9b6a; }
+.tool-badge.miss{ border-color: #c0614a; color: #c0614a; }
+.hdr-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid #3a3628;
+  background: none;
+  color: #d0c8b4;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.hdr-btn:hover { border-color: var(--accent); color: #fff; }
+
+/* ── Layout ─────────────────────────────────────────────── */
+.shell { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Left sidebar ───────────────────────────────────────── */
+.sidebar {
+  width: 320px;
+  background: var(--cream);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.sidebar-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.section-title::before {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* Tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 12px; }
+.tab {
+  flex: 1;
+  min-width: 50px;
+  padding: 6px 3px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+/* Inputs */
+label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 4px;
+  letter-spacing: 0.05em;
+}
+input[type=text], input[type=url], input[type=number], select, textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: #fff;
+  color: var(--ink);
+  font-family: 'Lora', serif;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+[data-theme="dark"] input[type=text],
+[data-theme="dark"] input[type=url],
+[data-theme="dark"] input[type=number],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea { background: var(--cream); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 80px; }
+
+.field { margin-bottom: 12px; }
+.row2  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* Checkboxes */
+.chk-group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.chk-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  transition: all 0.12s;
+  background: #fff;
+  user-select: none;
+}
+[data-theme="dark"] .chk-label { background: var(--cream); }
+.chk-label:has(input:checked) { background: var(--teal); border-color: var(--teal); color: #fff; }
+.chk-label input { display: none; }
+
+/* Toggle switch */
+.toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: var(--border);
+  border-radius: 20px;
+  transition: 0.2s;
+  cursor: pointer;
+}
+.toggle input:checked + .toggle-slider { background: var(--teal); }
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+.toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--r);
+  font-family: 'Syne', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary   { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #a33508; }
+.btn-secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); }
+[data-theme="dark"] .btn-secondary { background: var(--cream); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn:disabled  { opacity: 0.45; cursor: not-allowed; }
+.btn-full { width: 100%; }
+
+/* Messages */
+.msg {
+  padding: 8px 10px;
+  border-radius: var(--r);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  margin-top: 8px;
+  display: none;
+}
+.msg.ok   { background: #d4f0df; color: #1a6b3a; display: block; }
+.msg.err  { background: #fce8e3; color: #8b2a18; display: block; }
+.msg.info { background: #e8f0f8; color: #1a3a6b; display: block; }
+
+/* Progress bar */
+.progress-wrap { margin-top: 10px; display: none; }
+.progress-wrap.active { display: block; }
+.progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+.progress-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+.progress-done {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: #1a6b3a;
+  margin-top: 4px;
+}
+
+/* Downloads list */
+.dl-list { display: flex; flex-direction: column; gap: 6px; }
+.dl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 0.8rem;
+}
+[data-theme="dark"] .dl-item { background: var(--cream); }
+.dl-icon { font-size: 1.1rem; flex-shrink: 0; }
+.dl-name {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink);
+  word-break: break-all;
+  min-width: 0;
+}
+.dl-size {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.dl-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.icon-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: all 0.12s;
+}
+.icon-btn:hover     { border-color: var(--accent); color: var(--accent); }
+.icon-btn.del:hover { border-color: #c8430b; color: #c8430b; }
+
+/* Queue items */
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 4px;
+}
+[data-theme="dark"] .queue-item { background: var(--cream); }
+.queue-item .q-url {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.q-status {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.q-status.queued    { background: #fff3cd; color: #856404; }
+.q-status.running   { background: #cfe2ff; color: #084298; }
+.q-status.done      { background: #d1e7dd; color: #0f5132; }
+.q-status.error     { background: #f8d7da; color: #842029; }
+.q-status.cancelled { background: var(--cream); color: var(--muted); }
+
+/* History items */
+.hist-item {
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: box-shadow 0.12s;
+}
+[data-theme="dark"] .hist-item { background: var(--cream); }
+.hist-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-color: var(--warm); }
+.hist-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hist-source {
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+}
+.hist-tags { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--teal); margin-top: 3px; }
+.hist-actions { display: flex; gap: 4px; margin-top: 6px; }
+
+/* Collections */
+.coll-item {
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+}
+[data-theme="dark"] .coll-item { background: var(--cream); }
+.coll-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.coll-desc { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+
+/* Spinner */
+.spin {
+  display: none;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.spin.active { display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Main content ───────────────────────────────────────── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.results-bar {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .results-bar { background: var(--cream); }
+.results-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.results-count {
+  background: var(--accent);
+  color: #fff;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.filter-pills { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.pill {
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  cursor: pointer;
+  background: #fff;
+  transition: all 0.12s;
+}
+[data-theme="dark"] .pill { background: var(--cream); }
+.pill.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+.pill:hover:not(.active) { border-color: var(--teal); color: var(--teal); }
+
+.results-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.result-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  cursor: default;
+  overflow: hidden;
+}
+[data-theme="dark"] .result-card { background: var(--cream); }
+.result-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: var(--warm); }
+.card-header { display: flex; align-items: flex-start; gap: 8px; }
+.card-thumb {
+  width: 60px; height: 45px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--cream);
+}
+.card-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
+.card-meta { flex: 1; min-width: 0; }
+.card-source { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.card-title  { font-family: 'Syne', sans-serif; font-size: 0.88rem; font-weight: 600; line-height: 1.3; color: var(--ink); margin-top: 2px; }
+.card-authors { font-style: italic; font-size: 0.78rem; color: var(--muted); }
+.card-snippet {
+  font-size: 0.8rem; color: var(--muted); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.card-btn {
+  padding: 5px 10px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.12s;
+  color: var(--ink);
+}
+.card-btn.dl  { background: var(--accent); color: #fff; border-color: var(--accent); }
+.card-btn.dl:hover { background: #a33508; }
+.card-btn:hover:not(.dl) { border-color: var(--teal); color: var(--teal); }
+
+/* ── Viewer panel ───────────────────────────────────────── */
+.viewer {
+  width: 520px;
+  background: #fff;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .viewer { background: var(--cream); }
+.viewer-toolbar {
+  height: 46px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  flex-shrink: 0;
+  background: var(--cream);
+}
+.viewer-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--cream);
+}
+.viewer-placeholder { text-align: center; color: var(--muted); }
+.viewer-placeholder p { font-size: 0.85rem; margin-top: 8px; }
+.vp-icon { font-size: 3rem; opacity: 0.35; }
+#viewerIframe { width: 100%; height: 100%; border: none; display: none; }
+#viewerVideo  { width: 100%; max-height: 100%; display: none; background: #000; }
+#viewerAudio  { width: 90%; margin: auto; display: none; }
+#viewerText   { width: 100%; height: 100%; overflow-y: auto; padding: 20px; font-family: 'Lora', serif; font-size: 0.9rem; line-height: 1.7; display: none; }
+
+/* ── Modals ─────────────────────────────────────────────── */
+.modal-bg {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  width: 380px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+}
+.modal h2 { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 800; margin-bottom: 16px; }
+.modal .row2 { margin-top: 12px; }
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-of-type { border-bottom: none; }
+.settings-row label { margin: 0; font-size: 0.75rem; }
+
+/* Empty state */
+.empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty-state .big { font-size: 3rem; opacity: 0.3; margin-bottom: 12px; }
+.empty-state p { font-size: 0.9rem; }
+
+/* Loading skeleton */
+.skeleton {
+  background: linear-gradient(90deg, var(--cream) 25%, var(--warm) 50%, var(--cream) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+  height: 16px;
+  margin-bottom: 8px;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* Tab panels */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ══ HEADER ═══════════════════════════════════════════════════ -->
+<header>
+  <div class="logo">
+    <div>
+      Edu<span class="logo-dot">Load</span>
+      <div class="logo-sub">Educational Resource Hub</div>
+    </div>
+  </div>
+  <div class="hdr-tools" id="toolBadges"></div>
+  <button class="hdr-btn" id="btnSettings">⚙ Settings</button>
+</header>
+
+<!-- ══ SHELL ════════════════════════════════════════════════════ -->
+<div class="shell">
+
+<!-- ── SIDEBAR ──────────────────────────────────────────────── -->
+<aside class="sidebar">
+
+  <div class="sidebar-section">
+    <div class="tabs">
+      <button class="tab active" data-tab="search">🔍 Search</button>
+      <button class="tab" data-tab="url">🔗 URL</button>
+      <button class="tab" data-tab="batch">📦 Batch</button>
+      <button class="tab" data-tab="convert">⚙️ Convert</button>
+      <button class="tab" data-tab="history">📋 History</button>
+      <button class="tab" data-tab="collections">🗂 Collections</button>
+    </div>
+
+    <!-- Search panel -->
+    <div class="tab-panel active" id="tab-search">
+      <div class="field">
+        <label>Describe what you need</label>
+        <textarea id="nlInput" placeholder="e.g. lecture on Fourier analysis, or research paper on transformers, or classic French novel…"></textarea>
+      </div>
+      <div class="field">
+        <label>Sources</label>
+        <div class="chk-group">
+          <label class="chk-label"><input type="checkbox" name="src" value="youtube" checked> ▶️ YouTube</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="arxiv" checked> 📄 arXiv</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="openalex" checked> 🔬 OpenAlex</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="doaj" checked> 🔓 DOAJ</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="gutenberg" checked> 📚 Gutenberg</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="archive" checked> 🏛 Archive</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="web" checked> 🌐 Web</label>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" id="btnSearch">
+        <span class="spin" id="searchSpin"></span>
+        Search
+      </button>
+      <div class="msg" id="searchMsg"></div>
+    </div>
+
+    <!-- URL panel -->
+    <div class="tab-panel" id="tab-url">
+      <div class="field">
+        <label>URL (video, PDF, document, …)</label>
+        <input type="url" id="urlInput" placeholder="https://…">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Quality</label>
+          <select id="qualitySelect">
+            <option value="best">Best</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+            <option value="audio">Audio only</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Format</label>
+          <select id="fmtSelect">
+            <option value="mp4">MP4</option>
+            <option value="mp3">MP3</option>
+            <option value="original">Original</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Subtitles</label>
+        <div class="chk-group">
+          <label class="chk-label"><input type="checkbox" name="sub" value="en"> EN</label>
+          <label class="chk-label"><input type="checkbox" name="sub" value="fr"> FR</label>
+          <label class="chk-label"><input type="checkbox" name="sub" value="ar"> AR</label>
+          <label class="chk-label"><input type="checkbox" name="sub" value="es"> ES</label>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" id="btnDownload">
+        <span class="spin" id="dlSpin"></span>
+        Download
+      </button>
+      <div class="progress-wrap" id="urlProgress">
+        <div class="progress-bar"><div class="progress-fill" id="urlProgressFill"></div></div>
+        <div class="progress-meta">
+          <span id="urlProgressPct"></span>
+          <span id="urlProgressSpeed"></span>
+          <span id="urlProgressEta"></span>
+        </div>
+        <div class="progress-done" id="urlProgressDone"></div>
+      </div>
+      <div class="msg" id="dlMsg"></div>
+    </div>
+
+    <!-- Batch panel -->
+    <div class="tab-panel" id="tab-batch">
+      <div class="field">
+        <label>URLs (one per line)</label>
+        <textarea id="batchUrls" style="min-height:100px"
+          placeholder="https://www.youtube.com/watch?v=...
+https://arxiv.org/pdf/1706.03762.pdf
+https://archive.org/download/..."></textarea>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Quality</label>
+          <select id="batchQuality">
+            <option value="best">Best</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+            <option value="audio">Audio only</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Format</label>
+          <select id="batchFmt">
+            <option value="mp4">MP4</option>
+            <option value="mp3">MP3</option>
+            <option value="original">Original</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Subtitles</label>
+        <div class="chk-group">
+          <label class="chk-label"><input type="checkbox" name="bsub" value="en"> EN</label>
+          <label class="chk-label"><input type="checkbox" name="bsub" value="fr"> FR</label>
+          <label class="chk-label"><input type="checkbox" name="bsub" value="ar"> AR</label>
+          <label class="chk-label"><input type="checkbox" name="bsub" value="es"> ES</label>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-primary" id="btnQueueAll" style="flex:1">
+          <span class="spin" id="batchSpin"></span>
+          Queue All
+        </button>
+        <button class="btn btn-secondary" id="btnBatchClear" style="padding:7px 10px;font-size:0.75rem">Clear</button>
+      </div>
+      <div class="msg" id="batchMsg"></div>
+      <div id="batchJobList"></div>
+    </div>
+
+    <!-- Convert panel -->
+    <div class="tab-panel" id="tab-convert">
+      <div class="field">
+        <label>File in downloads</label>
+        <select id="convertFile"><option value="">— select file —</option></select>
+      </div>
+      <div class="field">
+        <label>Convert to</label>
+        <select id="convertTo">
+          <option value="mp3">MP3 (from video)</option>
+          <option value="pdf">PDF (from docx/html/md)</option>
+          <option value="docx">DOCX (from pdf/html)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-full" id="btnConvert">
+        <span class="spin" id="convSpin"></span>
+        Convert
+      </button>
+      <div class="msg" id="convMsg"></div>
+    </div>
+
+    <!-- History panel -->
+    <div class="tab-panel" id="tab-history">
+      <button class="btn btn-secondary btn-full" id="btnRefreshHistory" style="margin-bottom:10px;font-size:0.75rem;padding:7px">
+        ↺ Refresh history
+      </button>
+      <div id="historyList">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No history yet.</div>
+      </div>
+    </div>
+
+    <!-- Collections panel -->
+    <div class="tab-panel" id="tab-collections">
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-primary" id="btnNewCollection" style="flex:1;font-size:0.75rem;padding:7px">
+          + New Collection
+        </button>
+        <button class="btn btn-secondary" id="btnRefreshCollections" style="font-size:0.75rem;padding:7px">↺</button>
+      </div>
+      <div id="collectionsList">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No collections yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active downloads & queue -->
+  <div class="sidebar-section" id="queueSection" style="display:none">
+    <div class="section-title">
+      Active Downloads
+      <button class="icon-btn" id="btnClearDone" style="margin-left:auto;font-size:0.65rem">✕ Clear done</button>
+    </div>
+    <div id="queueList"></div>
+  </div>
+
+  <!-- Downloads list -->
+  <div class="sidebar-section" style="flex:1;overflow-y:auto;">
+    <div class="section-title">
+      Downloads
+      <button class="icon-btn" id="refreshFiles" style="margin-left:auto;font-size:0.7rem">↺ refresh</button>
+    </div>
+    <div class="dl-list" id="dlList">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No files yet.</div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ── MAIN ──────────────────────────────────────────────────── -->
+<main class="main">
+  <div class="results-bar">
+    <span class="results-label">Results</span>
+    <span class="results-count" id="resCount" style="display:none"></span>
+    <div class="filter-pills" id="filterPills"></div>
+  </div>
+  <div class="results-grid" id="resultsGrid">
+    <div class="empty-state">
+      <div class="big">📖</div>
+      <p>Search for educational resources, paste a URL, or describe<br>what you need — results appear here.</p>
+    </div>
+  </div>
+</main>
+
+<!-- ── VIEWER ────────────────────────────────────────────────── -->
+<aside class="viewer">
+  <div class="viewer-toolbar">
+    <span class="viewer-title" id="viewerTitle">No file open</span>
+    <button class="icon-btn" id="closeViewer">✕</button>
+  </div>
+  <div class="viewer-body" id="viewerBody">
+    <div class="viewer-placeholder" id="viewerPlaceholder">
+      <div class="vp-icon">🔬</div>
+      <p>Open a file to preview it here</p>
+    </div>
+    <video  id="viewerVideo"  controls></video>
+    <audio  id="viewerAudio"  controls></audio>
+    <iframe id="viewerIframe" sandbox="allow-scripts allow-same-origin"></iframe>
+    <div    id="viewerText"></div>
+  </div>
+</aside>
+
+</div><!-- /shell -->
+
+<!-- ══ QUICK DOWNLOAD MODAL ════════════════════════════════════ -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2>Quick Download</h2>
+    <div class="field">
+      <label>URL</label>
+      <input type="url" id="modalUrl" placeholder="auto-filled">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Quality</label>
+        <select id="modalQuality">
+          <option value="best">Best</option>
+          <option value="1080">1080p</option>
+          <option value="720">720p</option>
+          <option value="audio">Audio only</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Format</label>
+        <select id="modalFmt">
+          <option value="mp4">MP4</option>
+          <option value="mp3">MP3</option>
+          <option value="original">Original</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Subtitles</label>
+      <div class="chk-group">
+        <label class="chk-label"><input type="checkbox" name="msub" value="en"> EN</label>
+        <label class="chk-label"><input type="checkbox" name="msub" value="fr"> FR</label>
+        <label class="chk-label"><input type="checkbox" name="msub" value="ar"> AR</label>
+      </div>
+    </div>
+    <div class="progress-wrap" id="modalProgress">
+      <div class="progress-bar"><div class="progress-fill" id="modalProgressFill"></div></div>
+      <div class="progress-meta">
+        <span id="modalProgressPct"></span>
+        <span id="modalProgressSpeed"></span>
+        <span id="modalProgressEta"></span>
+      </div>
+      <div class="progress-done" id="modalProgressDone"></div>
+    </div>
+    <div class="row2" style="margin-top:14px">
+      <button class="btn btn-secondary" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary"   id="modalConfirm">
+        <span class="spin" id="modalSpin"></span>
+        Download
+      </button>
+    </div>
+    <div class="msg" id="modalMsg"></div>
+  </div>
+</div>
+
+<!-- ══ NEW COLLECTION MODAL ═════════════════════════════════════ -->
+<div class="modal-bg" id="collModalBg">
+  <div class="modal" style="width:340px">
+    <h2>New Collection</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="collName" placeholder="e.g. Linear Algebra Course">
+    </div>
+    <div class="field">
+      <label>Description (optional)</label>
+      <input type="text" id="collDesc" placeholder="">
+    </div>
+    <div class="row2" style="margin-top:14px">
+      <button class="btn btn-secondary" id="collModalCancel">Cancel</button>
+      <button class="btn btn-primary"   id="collModalConfirm">Create</button>
+    </div>
+    <div class="msg" id="collModalMsg"></div>
+  </div>
+</div>
+
+<!-- ══ ADD TO COLLECTION MODAL ══════════════════════════════════ -->
+<div class="modal-bg" id="addToCollModalBg">
+  <div class="modal" style="width:340px">
+    <h2>Add to Collection</h2>
+    <div class="field">
+      <label>Choose collection</label>
+      <select id="addToCollSelect"><option value="">— select —</option></select>
+    </div>
+    <input type="hidden" id="addToCollHistoryId">
+    <div class="row2" style="margin-top:14px">
+      <button class="btn btn-secondary" id="addToCollCancel">Cancel</button>
+      <button class="btn btn-primary"   id="addToCollConfirm">Add</button>
+    </div>
+    <div class="msg" id="addToCollMsg"></div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS MODAL ════════════════════════════════════════════ -->
+<div class="modal-bg" id="settingsModalBg">
+  <div class="modal" style="width:420px">
+    <h2>⚙ Settings</h2>
+
+    <div class="field">
+      <label>Download Directory</label>
+      <input type="text" id="settingDownloadDir" placeholder="./downloads">
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Max Concurrent Downloads</label>
+        <input type="number" id="settingMaxConcurrent" min="1" max="10" value="3">
+      </div>
+      <div class="field">
+        <label>Default Quality</label>
+        <select id="settingDefaultQuality">
+          <option value="best">Best</option>
+          <option value="1080">1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+          <option value="360">360p</option>
+          <option value="audio">Audio only</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Default Subtitles</label>
+      <div class="chk-group">
+        <label class="chk-label"><input type="checkbox" name="settingSub" value="en"> EN</label>
+        <label class="chk-label"><input type="checkbox" name="settingSub" value="fr"> FR</label>
+        <label class="chk-label"><input type="checkbox" name="settingSub" value="ar"> AR</label>
+        <label class="chk-label"><input type="checkbox" name="settingSub" value="es"> ES</label>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <label>Auto-open viewer after download</label>
+      <label class="toggle">
+        <input type="checkbox" id="settingAutoOpen" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="settings-row">
+      <label>Dark mode</label>
+      <label class="toggle">
+        <input type="checkbox" id="settingDarkMode">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div style="text-align:right;margin-top:20px">
+      <button class="btn btn-secondary" id="settingsClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let allResults    = [];
+let activeFilter  = 'all';
+let currentFiles  = [];
+let activeEvtSources = {};
+let batchJobs     = [];
+window.autoOpenViewer = true;
+
+// ── Utility ─────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const fmtBytes = b => b > 1e6 ? (b/1e6).toFixed(1)+'MB' : b > 1e3 ? (b/1e3).toFixed(0)+'KB' : b+'B';
+const extIcon  = e => ({'pdf':'📄','mp4':'🎬','mp3':'🎵','docx':'📝','doc':'📝','html':'🌐',
+                         'htm':'🌐','txt':'📃','epub':'📖','zip':'📦','srt':'💬'}[e] || '📁');
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const VIEWABLE_EXTS = ['mp4','webm','mkv','avi','mov','mp3','ogg','wav','flac','pdf','html','htm','txt','srt','md'];
+
+function showMsg(el, type, text) {
+  el.className = 'msg ' + type;
+  el.textContent = text;
+  if (type !== 'err') setTimeout(() => { el.className='msg'; el.textContent=''; }, 5000);
+}
+
+const _st = document.createElement('style');
+_st.textContent = '@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}';
+document.head.appendChild(_st);
+
+// ── Tabs ─────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  $('tab-' + t.dataset.tab).classList.add('active');
+  if (t.dataset.tab === 'history')     loadHistory();
+  if (t.dataset.tab === 'collections') loadCollections();
+}));
+
+// ── Tool badges ──────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    currentFiles = d.files || [];
+    const tb = $('toolBadges');
+    tb.innerHTML = '';
+    let ytVersion = '';
+    try {
+      const vr = await fetch('/api/ytdlp_version');
+      const vd = await vr.json();
+      ytVersion = vd.version ? ` v${vd.version}` : '';
+    } catch(_) {}
+    [['yt-dlp', d.tools.yt_dlp, ytVersion], ['ffmpeg', d.tools.ffmpeg, ''], ['pandoc', d.tools.pandoc, '']].forEach(([n,ok,tip]) => {
+      const b = document.createElement('span');
+      b.className = 'tool-badge ' + (ok ? 'ok' : 'miss');
+      b.textContent = ok ? `✓ ${n}` : `✗ ${n}`;
+      if (tip) b.title = n + tip;
+      tb.appendChild(b);
+    });
+    renderFileList(d.files);
+    populateConvertSelect(d.files);
+  } catch(e) {}
+}
+
+function renderFileList(files) {
+  const list = $('dlList');
+  if (!files.length) {
+    list.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No files yet.</div>';
+    return;
+  }
+  list.innerHTML = files.map(f => `
+    <div class="dl-item">
+      <span class="dl-icon">${extIcon(f.ext)}</span>
+      <span class="dl-name" title="${esc(f.name)}">${esc(f.name)}</span>
+      <span class="dl-size">${fmtBytes(f.size)}</span>
+      <div class="dl-actions">
+        <button class="icon-btn" onclick="openViewer('${esc(f.name)}','${f.ext}')" title="View/Play">👁</button>
+        <a href="/api/file/${encodeURIComponent(f.name)}" download>
+          <button class="icon-btn" title="Save">💾</button>
+        </a>
+        <button class="icon-btn del" onclick="deleteFile('${esc(f.name)}')" title="Delete">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function populateConvertSelect(files) {
+  const sel = $('convertFile');
+  sel.innerHTML = '<option value="">— select file —</option>' +
+    files.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('');
+}
+
+$('refreshFiles').addEventListener('click', loadStatus);
+
+async function deleteFile(name) {
+  await fetch(`/api/file/${encodeURIComponent(name)}`, {method:'DELETE'});
+  loadStatus();
+}
+
+// ── Progress tracking ─────────────────────────────────────────────
+function trackProgress(jobId, opts) {
+  if (activeEvtSources[jobId]) activeEvtSources[jobId].close();
+  const es = new EventSource(`/api/progress/${jobId}`);
+  activeEvtSources[jobId] = es;
+
+  es.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (opts.wrapEl) opts.wrapEl.classList.add('active');
+
+    if (d.status === 'queued') {
+      if (opts.pctEl)  opts.pctEl.textContent = `Queued (pos ${d.position ?? '?'})`;
+      if (opts.fillEl) opts.fillEl.style.width = '0%';
+    } else if (d.status === 'running') {
+      const pct = d.progress || 0;
+      if (opts.fillEl)  opts.fillEl.style.width  = pct + '%';
+      if (opts.pctEl)   opts.pctEl.textContent   = pct.toFixed(1) + '%';
+      if (opts.speedEl) opts.speedEl.textContent = d.speed || '';
+      if (opts.etaEl)   opts.etaEl.textContent   = d.eta ? 'ETA ' + d.eta : '';
+    } else if (d.status === 'done') {
+      if (opts.fillEl)  opts.fillEl.style.width  = '100%';
+      if (opts.pctEl)   opts.pctEl.textContent   = '100%';
+      if (opts.speedEl) opts.speedEl.textContent = '';
+      if (opts.etaEl)   opts.etaEl.textContent   = '';
+      if (opts.doneEl)  opts.doneEl.textContent  = `✓ ${d.file || 'Done'}`;
+      es.close();
+      delete activeEvtSources[jobId];
+      loadStatus();
+      // auto-open viewer
+      if (d.file && window.autoOpenViewer) {
+        const ext = d.file.split('.').pop().toLowerCase();
+        if (VIEWABLE_EXTS.includes(ext)) openViewer(d.file, ext);
+      }
+      if (opts.onDone) opts.onDone(d);
+    } else if (d.status === 'error') {
+      if (opts.pctEl) opts.pctEl.textContent = '✗ Error: ' + (d.error || 'unknown');
+      es.close();
+      delete activeEvtSources[jobId];
+      if (opts.onError) opts.onError(d);
+    }
+    renderQueuePanel();
+  };
+
+  es.onerror = () => { es.close(); delete activeEvtSources[jobId]; };
+}
+
+// ── Queue panel ───────────────────────────────────────────────────
+function renderQueuePanel() {
+  fetch('/api/queue').then(r => r.json()).then(jobs => {
+    const section = $('queueSection');
+    const listEl  = $('queueList');
+    const active  = jobs.filter(j => ['queued','running','done','error'].includes(j.status));
+    if (!active.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    listEl.innerHTML = active.map(j => {
+      const short = j.url.length > 40 ? j.url.slice(0,38) + '…' : j.url;
+      const bar   = j.status === 'running'
+        ? `<div class="progress-bar" style="margin-top:4px"><div class="progress-fill" style="width:${j.progress||0}%"></div></div>`
+        : '';
+      const cancelBtn = j.status === 'queued'
+        ? `<button class="icon-btn" onclick="cancelJob('${j.job_id}')" title="Cancel" style="font-size:0.6rem">✕</button>`
+        : '';
+      return `<div class="queue-item">
+        <span class="q-url" title="${esc(j.url)}">${esc(short)}</span>
+        <span class="q-status ${j.status}">${j.status}</span>
+        ${cancelBtn}
+      </div>${bar}`;
+    }).join('');
+  }).catch(() => {});
+}
+
+async function cancelJob(jobId) {
+  await fetch(`/api/queue/${jobId}`, {method:'DELETE'});
+  renderQueuePanel();
+}
+
+$('btnClearDone').addEventListener('click', () => { renderQueuePanel(); loadStatus(); });
+
+// ── Search ────────────────────────────────────────────────────────
+$('btnSearch').addEventListener('click', async () => {
+  const text = $('nlInput').value.trim();
+  if (!text) return;
+  const srcs = [...document.querySelectorAll('input[name=src]:checked')].map(x => x.value);
+  $('searchSpin').classList.add('active');
+  $('btnSearch').disabled = true;
+  try {
+    const r = await fetch('/api/nl_search', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text, sources: srcs})
+    });
+    const d = await r.json();
+    allResults = d.results || [];
+    activeFilter = 'all';
+    renderResults();
+    showMsg($('searchMsg'), 'ok', `${allResults.length} results found.`);
+  } catch(e) {
+    showMsg($('searchMsg'), 'err', 'Search failed: ' + e.message);
+  } finally {
+    $('searchSpin').classList.remove('active');
+    $('btnSearch').disabled = false;
+  }
+});
+
+// ── Thumbnails ────────────────────────────────────────────────────
+function getCardBanner(r) {
+  if (r.source === 'YouTube') {
+    const m = (r.url || '').match(/[?&]v=([^&]+)/);
+    const id = m ? m[1] : null;
+    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : (r.thumbnail || null);
+  }
+  if (r.source === 'Archive.org') {
+    const parts = (r.url || '').replace(/\/$/, '').split('/');
+    const id = parts[parts.length - 1];
+    return id ? `https://archive.org/services/img/${id}` : null;
+  }
+  return null;
+}
+
+function renderResults() {
+  const grid  = $('resultsGrid');
+  const count = $('resCount');
+  const pills = $('filterPills');
+
+  const filtered = activeFilter === 'all' ? allResults
+    : allResults.filter(r => r.source === activeFilter);
+
+  const sources = [...new Set(allResults.map(r => r.source))];
+  pills.innerHTML = ['All', ...sources].map(s => {
+    const lbl    = s === 'All' ? 'all' : s;
+    const active = activeFilter === lbl;
+    return `<span class="pill${active?' active':''}" data-src="${lbl}">${
+      s === 'All' ? `All (${allResults.length})` : `${allResults.find(r=>r.source===s)?.icon||''} ${s}`
+    }</span>`;
+  }).join('');
+  pills.querySelectorAll('.pill').forEach(p => p.addEventListener('click', () => {
+    activeFilter = p.dataset.src; renderResults();
+  }));
+
+  count.textContent   = filtered.length;
+  count.style.display = filtered.length ? 'inline' : 'none';
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="big">🔍</div><p>No results. Try different keywords or sources.</p></div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map((r, i) => {
+    const banner = getCardBanner(r);
+    const bannerHtml = banner
+      ? `<img src="${esc(banner)}" alt="" loading="lazy"
+           onerror="this.style.display='none'"
+           style="width:calc(100% + 28px);height:120px;object-fit:cover;border-radius:4px 4px 0 0;margin:-14px -14px 10px -14px;display:block">`
+      : '';
+    const headerThumb = !banner && r.thumbnail
+      ? `<img class="card-thumb" src="${esc(r.thumbnail)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : (!banner ? `<span class="card-icon">${r.icon||'📄'}</span>` : '');
+    return `
+    <div class="result-card" style="animation:fadeIn 0.2s ${i*0.03}s both">
+      ${bannerHtml}
+      <div class="card-header">
+        ${headerThumb}
+        <div class="card-meta">
+          <div class="card-source">${esc(r.source)}</div>
+          <div class="card-title">${esc(r.title)}</div>
+          ${r.authors ? `<div class="card-authors">${esc(r.authors)}</div>` : ''}
+        </div>
+      </div>
+      ${r.snippet ? `<div class="card-snippet">${esc(r.snippet)}</div>` : ''}
+      <div class="card-actions">
+        ${r.url ? `<button class="card-btn" onclick="window.open('${esc(r.url)}','_blank')">🔗 Open</button>` : ''}
+        ${r.pdf_url ? `<button class="card-btn dl" onclick="quickDownload('${esc(r.pdf_url)}')">⬇ Download</button>` : ''}
+        ${r.url && r.source==='YouTube' ? `<button class="card-btn dl" onclick="quickDownload('${esc(r.url)}')">⬇ Video</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── URL Download ──────────────────────────────────────────────────
+$('btnDownload').addEventListener('click', async () => {
+  const url = $('urlInput').value.trim();
+  if (!url) return showMsg($('dlMsg'), 'err', 'Paste a URL first.');
+  const subs = [...document.querySelectorAll('input[name=sub]:checked')].map(x => x.value);
+  $('dlSpin').classList.add('active');
+  $('btnDownload').disabled = true;
+  $('urlProgressFill').style.width = '0%';
+  $('urlProgressPct').textContent = $('urlProgressSpeed').textContent = $('urlProgressEta').textContent = $('urlProgressDone').textContent = '';
+  try {
+    const r = await fetch('/api/download', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url, quality: $('qualitySelect').value, fmt: $('fmtSelect').value, subs})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Download failed');
+    trackProgress(d.job_id, {
+      fillEl:  $('urlProgressFill'),
+      pctEl:   $('urlProgressPct'),
+      speedEl: $('urlProgressSpeed'),
+      etaEl:   $('urlProgressEta'),
+      doneEl:  $('urlProgressDone'),
+      wrapEl:  $('urlProgress'),
+      onDone:  () => { $('dlSpin').classList.remove('active'); $('btnDownload').disabled = false; },
+      onError: data => { showMsg($('dlMsg'), 'err', data.error || 'Download failed'); $('dlSpin').classList.remove('active'); $('btnDownload').disabled = false; }
+    });
+    renderQueuePanel();
+  } catch(e) {
+    showMsg($('dlMsg'), 'err', e.message);
+    $('dlSpin').classList.remove('active');
+    $('btnDownload').disabled = false;
+  }
+});
+
+// ── Quick download modal ──────────────────────────────────────────
+function quickDownload(url) {
+  $('modalUrl').value = url;
+  $('modalMsg').className = 'msg';
+  $('modalProgressDone').textContent = $('modalProgressPct').textContent = '';
+  $('modalProgressFill').style.width = '0%';
+  $('modalProgress').classList.remove('active');
+  $('modalConfirm').disabled = false;
+  $('modalBg').classList.add('open');
+}
+$('modalCancel').addEventListener('click', () => $('modalBg').classList.remove('open'));
+$('modalBg').addEventListener('click', e => { if(e.target===$('modalBg')) $('modalBg').classList.remove('open'); });
+
+$('modalConfirm').addEventListener('click', async () => {
+  const url  = $('modalUrl').value.trim();
+  const subs = [...document.querySelectorAll('input[name=msub]:checked')].map(x => x.value);
+  $('modalSpin').classList.add('active');
+  $('modalConfirm').disabled = true;
+  try {
+    const r = await fetch('/api/download', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url, quality: $('modalQuality').value, fmt: $('modalFmt').value, subs})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'failed');
+    trackProgress(d.job_id, {
+      fillEl:  $('modalProgressFill'),
+      pctEl:   $('modalProgressPct'),
+      speedEl: $('modalProgressSpeed'),
+      etaEl:   $('modalProgressEta'),
+      doneEl:  $('modalProgressDone'),
+      wrapEl:  $('modalProgress'),
+      onDone:  () => { $('modalSpin').classList.remove('active'); setTimeout(() => $('modalBg').classList.remove('open'), 1800); },
+      onError: data => { showMsg($('modalMsg'), 'err', data.error || 'failed'); $('modalSpin').classList.remove('active'); $('modalConfirm').disabled = false; }
+    });
+    renderQueuePanel();
+  } catch(e) {
+    showMsg($('modalMsg'), 'err', e.message);
+    $('modalSpin').classList.remove('active');
+    $('modalConfirm').disabled = false;
+  }
+});
+
+// ── Batch download ────────────────────────────────────────────────
+$('btnBatchClear').addEventListener('click', () => {
+  $('batchUrls').value = '';
+  $('batchJobList').innerHTML = '';
+  batchJobs = [];
+});
+
+$('btnQueueAll').addEventListener('click', async () => {
+  const lines = $('batchUrls').value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return showMsg($('batchMsg'), 'err', 'No URLs found.');
+  const subs = [...document.querySelectorAll('input[name=bsub]:checked')].map(x => x.value);
+  $('batchSpin').classList.add('active');
+  $('btnQueueAll').disabled = true;
+  try {
+    const r = await fetch('/api/batch', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({urls: lines, quality: $('batchQuality').value, fmt: $('batchFmt').value, subs})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Batch failed');
+    batchJobs = d.job_ids.map((id, i) => ({job_id: id, url: lines[i], status: 'queued', progress: 0}));
+    renderBatchJobList();
+    batchJobs.forEach((job, i) => trackBatchJob(job.job_id, i));
+    showMsg($('batchMsg'), 'ok', `Queued ${d.count} URLs.`);
+    renderQueuePanel();
+  } catch(e) {
+    showMsg($('batchMsg'), 'err', e.message);
+  } finally {
+    $('batchSpin').classList.remove('active');
+    $('btnQueueAll').disabled = false;
+  }
+});
+
+function renderBatchJobList() {
+  const el = $('batchJobList');
+  if (!batchJobs.length) { el.innerHTML = ''; return; }
+  const done  = batchJobs.filter(j => j.status === 'done').length;
+  const error = batchJobs.filter(j => j.status === 'error').length;
+  const total = batchJobs.length;
+  const summary = (done + error === total && total > 0)
+    ? `<div class="msg ok" style="display:block;margin-bottom:8px">${done} of ${total} downloaded successfully.</div>`
+    : '';
+  el.innerHTML = summary + batchJobs.map(j => {
+    const short = j.url.length > 45 ? j.url.slice(0, 43) + '…' : j.url;
+    const bar   = ['running','done'].includes(j.status)
+      ? `<div class="progress-bar" style="margin-top:3px"><div class="progress-fill" style="width:${j.progress||0}%"></div></div>`
+      : '';
+    const statusLabel = j.status === 'done' ? '✓' : j.status === 'error' ? '✗' : j.status;
+    return `<div class="queue-item">
+      <span class="q-url" title="${esc(j.url)}">${esc(short)}</span>
+      <span class="q-status ${j.status}">${statusLabel}</span>
+    </div>${bar}`;
+  }).join('');
+}
+
+function trackBatchJob(jobId, idx) {
+  const es = new EventSource(`/api/progress/${jobId}`);
+  es.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (idx < batchJobs.length) {
+      batchJobs[idx].status   = d.status;
+      batchJobs[idx].progress = d.progress || 0;
+    }
+    renderBatchJobList();
+    if (d.status === 'done' || d.status === 'error') { es.close(); loadStatus(); }
+  };
+  es.onerror = () => es.close();
+}
+
+// ── Convert ───────────────────────────────────────────────────────
+$('btnConvert').addEventListener('click', async () => {
+  const file = $('convertFile').value;
+  const to   = $('convertTo').value;
+  if (!file) return showMsg($('convMsg'), 'err', 'Select a file first.');
+  $('convSpin').classList.add('active');
+  $('btnConvert').disabled = true;
+  try {
+    const r = await fetch('/api/convert', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({filename: file, to_fmt: to})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Conversion failed');
+    showMsg($('convMsg'), 'ok', `✓ Created: ${d.file}`);
+    loadStatus();
+  } catch(e) {
+    showMsg($('convMsg'), 'err', e.message);
+  } finally {
+    $('convSpin').classList.remove('active');
+    $('btnConvert').disabled = false;
+  }
+});
+
+// ── Subtitle helper ───────────────────────────────────────────────
+function srtToVtt(srt) {
+  return 'WEBVTT\n\n' + srt
+    .replace(/\r\n/g, '\n')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+    .trim();
+}
+
+// ── Viewer ────────────────────────────────────────────────────────
+async function openViewer(name, ext) {
+  const url = `/api/file/${encodeURIComponent(name)}`;
+  $('viewerTitle').textContent = name;
+  $('viewerPlaceholder').style.display = 'none';
+  $('viewerVideo').style.display = $('viewerAudio').style.display =
+  $('viewerIframe').style.display = $('viewerText').style.display = 'none';
+
+  if (['mp4','webm','mkv','avi','mov'].includes(ext)) {
+    const v = $('viewerVideo');
+    [...v.querySelectorAll('track')].forEach(t => t.remove());
+    v.src = url;
+    v.style.display = 'block';
+    const stem    = name.replace(/\.[^.]+$/, '');
+    const srtFile = currentFiles.find(f => f.ext === 'srt' && f.name.startsWith(stem));
+    if (srtFile) {
+      try {
+        const resp  = await fetch(`/api/file/${encodeURIComponent(srtFile.name)}`);
+        const vtt   = srtToVtt(await resp.text());
+        const blob  = new Blob([vtt], {type:'text/vtt'});
+        const track = document.createElement('track');
+        track.kind = 'subtitles'; track.src = URL.createObjectURL(blob); track.default = true;
+        v.appendChild(track);
+      } catch(_) {}
+    }
+  } else if (['mp3','ogg','wav','flac','aac'].includes(ext)) {
+    const a = $('viewerAudio'); a.src = url; a.style.display = 'block';
+  } else if (['pdf','html','htm'].includes(ext)) {
+    const f = $('viewerIframe'); f.src = url; f.style.display = 'block';
+  } else if (['txt','srt','md'].includes(ext)) {
+    fetch(url).then(r => r.text()).then(t => { const d = $('viewerText'); d.textContent = t; d.style.display = 'block'; });
+  } else {
+    $('viewerPlaceholder').style.display = 'flex';
+    $('viewerPlaceholder').innerHTML = `<div class="vp-icon">${extIcon(ext)}</div><p>No preview — <a href="${url}" download>save file</a></p>`;
+  }
+}
+
+$('closeViewer').addEventListener('click', () => {
+  $('viewerVideo').pause?.(); $('viewerAudio').pause?.();
+  $('viewerVideo').style.display = $('viewerAudio').style.display =
+  $('viewerIframe').style.display = $('viewerText').style.display = 'none';
+  $('viewerPlaceholder').style.display = 'flex';
+  $('viewerPlaceholder').innerHTML = '<div class="vp-icon">🔬</div><p>Open a file to preview it here</p>';
+  $('viewerTitle').textContent = 'No file open';
+});
+
+// ── History ───────────────────────────────────────────────────────
+async function loadHistory() {
+  try { const r = await fetch('/api/history'); renderHistory(await r.json()); } catch(e) {}
+}
+
+function renderHistory(items) {
+  const el = $('historyList');
+  if (!items.length) { el.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No history yet.</div>'; return; }
+  el.innerHTML = items.map(h => {
+    const date = (h.ts || '').slice(0, 10);
+    const size = h.size_kb ? `${h.size_kb} KB` : '';
+    const fileExists = currentFiles.some(f => f.name === h.filename);
+    return `<div class="hist-item" onclick="histItemClick('${esc(h.filename)}', ${fileExists})">
+      <div class="hist-title" title="${esc(h.title||h.filename)}">${esc(h.title||h.filename||'—')}</div>
+      <div class="hist-meta">
+        <span class="hist-source">${esc(h.source||'')}</span>
+        <span>${date}</span>
+        ${size ? `<span>${size}</span>` : ''}
+        ${!fileExists ? '<span style="color:#c0614a">file missing</span>' : ''}
+      </div>
+      ${h.tags ? `<div class="hist-tags"># ${esc(h.tags)}</div>` : ''}
+      <div class="hist-actions">
+        <button class="icon-btn" onclick="event.stopPropagation();showAddToCollection(${h.id})" title="Add to collection">🗂</button>
+        <button class="icon-btn del" onclick="event.stopPropagation();deleteHistory(${h.id})" title="Remove">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function histItemClick(filename, fileExists) {
+  if (!filename) return;
+  if (fileExists) { const ext = filename.split('.').pop().toLowerCase(); openViewer(filename, ext); }
+  else if (confirm('File is missing. Switch to URL tab to re-download?')) document.querySelector('[data-tab="url"]').click();
+}
+
+async function deleteHistory(id) {
+  await fetch(`/api/history/${id}`, {method:'DELETE'});
+  loadHistory();
+}
+
+$('btnRefreshHistory').addEventListener('click', loadHistory);
+
+// ── Collections ───────────────────────────────────────────────────
+async function loadCollections() {
+  try { const r = await fetch('/api/collections'); renderCollections(await r.json()); } catch(e) {}
+}
+
+function renderCollections(cols) {
+  const el = $('collectionsList');
+  if (!cols.length) { el.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No collections yet.</div>'; return; }
+  el.innerHTML = cols.map(c => `
+    <div class="coll-item">
+      <div class="coll-name">
+        <span>${esc(c.name)}</span>
+        <button class="icon-btn del" onclick="deleteCollection(${c.id})" title="Delete">🗑</button>
+      </div>
+      ${c.description ? `<div class="coll-desc">${esc(c.description)}</div>` : ''}
+      <div style="margin-top:6px">
+        <button class="icon-btn" onclick="viewCollection(${c.id})" style="font-size:0.68rem;padding:3px 8px">👁 View items</button>
+      </div>
+    </div>`).join('');
+}
+
+$('btnNewCollection').addEventListener('click', () => { $('collName').value = $('collDesc').value = ''; $('collModalMsg').className='msg'; $('collModalBg').classList.add('open'); });
+$('collModalCancel').addEventListener('click', () => $('collModalBg').classList.remove('open'));
+$('collModalBg').addEventListener('click', e => { if(e.target===$('collModalBg')) $('collModalBg').classList.remove('open'); });
+
+$('collModalConfirm').addEventListener('click', async () => {
+  const name = $('collName').value.trim();
+  const desc = $('collDesc').value.trim();
+  if (!name) return showMsg($('collModalMsg'), 'err', 'Enter a name.');
+  try {
+    const r = await fetch('/api/collections', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, description: desc})});
+    if (!r.ok) throw new Error((await r.json()).detail || 'failed');
+    $('collModalBg').classList.remove('open'); loadCollections();
+  } catch(e) { showMsg($('collModalMsg'), 'err', e.message); }
+});
+
+$('btnRefreshCollections').addEventListener('click', loadCollections);
+
+async function deleteCollection(id) {
+  if (!confirm('Delete this collection and all its items?')) return;
+  await fetch(`/api/collections/${id}`, {method:'DELETE'});
+  loadCollections();
+}
+
+async function viewCollection(id) {
+  try {
+    const d = await (await fetch(`/api/collections/${id}`)).json();
+    const items = d.items || [];
+    alert(`Collection: ${d.collection.name}\n\n${items.length ? items.map(i=>`• ${i.title||i.filename||'?'}`).join('\n') : '(empty)'}`);
+  } catch(e) {}
+}
+
+function showAddToCollection(historyId) {
+  $('addToCollHistoryId').value = historyId;
+  $('addToCollMsg').className = 'msg';
+  fetch('/api/collections').then(r=>r.json()).then(cols => {
+    $('addToCollSelect').innerHTML = '<option value="">— select —</option>' + cols.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    $('addToCollModalBg').classList.add('open');
+  });
+}
+$('addToCollCancel').addEventListener('click', () => $('addToCollModalBg').classList.remove('open'));
+$('addToCollModalBg').addEventListener('click', e => { if(e.target===$('addToCollModalBg')) $('addToCollModalBg').classList.remove('open'); });
+
+$('addToCollConfirm').addEventListener('click', async () => {
+  const collId    = $('addToCollSelect').value;
+  const historyId = $('addToCollHistoryId').value;
+  if (!collId) return showMsg($('addToCollMsg'), 'err', 'Select a collection.');
+  try {
+    const r = await fetch(`/api/collections/${collId}/items`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({history_id: parseInt(historyId)})});
+    if (!r.ok) throw new Error('failed');
+    $('addToCollModalBg').classList.remove('open');
+  } catch(e) { showMsg($('addToCollMsg'), 'err', e.message); }
+});
+
+// ── Settings ──────────────────────────────────────────────────────
+let _settingsTimer = null;
+function saveSetting(key, value) {
+  clearTimeout(_settingsTimer);
+  _settingsTimer = setTimeout(() => {
+    fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({[key]: value})});
+  }, 600);
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    if (s.dark_mode === 'true') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      $('settingDarkMode').checked = true;
+    }
+    if (s.download_dir)     $('settingDownloadDir').value  = s.download_dir;
+    if (s.max_concurrent)   $('settingMaxConcurrent').value = s.max_concurrent;
+    if (s.default_quality)  { $('settingDefaultQuality').value = s.default_quality; $('qualitySelect').value = s.default_quality; }
+    if (s.default_subs) {
+      s.default_subs.split(',').forEach(lang => {
+        const cb = document.querySelector(`input[name=sub][value="${lang.trim()}"]`);
+        if (cb) cb.checked = true;
+      });
+    }
+    if (s.auto_open_viewer !== undefined) {
+      const val = s.auto_open_viewer !== 'false';
+      $('settingAutoOpen').checked = val;
+      window.autoOpenViewer = val;
+    }
+  } catch(e) {}
+}
+
+$('btnSettings').addEventListener('click', () => $('settingsModalBg').classList.add('open'));
+$('settingsClose').addEventListener('click', () => $('settingsModalBg').classList.remove('open'));
+$('settingsModalBg').addEventListener('click', e => { if(e.target===$('settingsModalBg')) $('settingsModalBg').classList.remove('open'); });
+
+$('settingDownloadDir').addEventListener('input', e => saveSetting('download_dir', e.target.value));
+$('settingMaxConcurrent').addEventListener('change', e => saveSetting('max_concurrent', e.target.value));
+$('settingDefaultQuality').addEventListener('change', e => {
+  saveSetting('default_quality', e.target.value);
+  $('qualitySelect').value = e.target.value;
+});
+document.querySelectorAll('input[name=settingSub]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const subs = [...document.querySelectorAll('input[name=settingSub]:checked')].map(x=>x.value).join(',');
+    saveSetting('default_subs', subs);
+  });
+});
+$('settingAutoOpen').addEventListener('change', e => {
+  window.autoOpenViewer = e.target.checked;
+  saveSetting('auto_open_viewer', String(e.target.checked));
+});
+$('settingDarkMode').addEventListener('change', e => {
+  if (e.target.checked) document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  saveSetting('dark_mode', String(e.target.checked));
+});
+
+// ── Init ─────────────────────────────────────────────────────────
+loadStatus();
+loadSettings();
+setInterval(loadStatus, 15000);
+setInterval(renderQueuePanel, 2000);
+</script>
+</body>
+</html>

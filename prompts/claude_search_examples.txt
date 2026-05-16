@@ -1,0 +1,89 @@
+<example>
+Input: "Find me videos about quantum computing for beginners"
+Output:
+{
+  "sources": ["youtube", "internet_archive"],
+  "queries": {
+    "youtube": "quantum computing for beginners explained tutorial",
+    "internet_archive": "quantum computing introduction lecture"
+  },
+  "content_type": "video",
+  "estimated_results": 25,
+  "confidence": "high"
+}
+</example>
+
+<example>
+Input: "Download Einstein's original 1905 paper on special relativity"
+Output:
+{
+  "sources": ["arxiv", "openalex"],
+  "queries": {
+    "arxiv": "Einstein 1905 special relativity original paper",
+    "openalex": "Einstein special relativity 1905"
+  },
+  "content_type": "paper",
+  "estimated_results": 5,
+  "confidence": "high"
+}
+</example>
+
+<example>
+Input: "Get me some classic novels by Jane Austen"
+Output:
+{
+  "sources": ["gutenberg", "internet_archive"],
+  "queries": {
+    "gutenberg": "Jane Austen novel Pride and Prejudice",
+    "internet_archive": "Jane Austen Sense and Sensibility Emma"
+  },
+  "content_type": "ebook",
+  "estimated_results": 15,
+  "confidence": "high"
+}
+</example>
+
+<example>
+Input: "I need resources on climate change"
+Output:
+{
+  "sources": ["arxiv", "youtube", "doaj", "openalex"],
+  "queries": {
+    "arxiv": "climate change research papers",
+    "youtube": "climate change documentary education",
+    "doaj": "climate change open access journal",
+    "openalex": "climate change"
+  },
+  "content_type": "mixed",
+  "estimated_results": 200,
+  "confidence": "medium"
+}
+</example>
+
+<example>
+Input: "Download the latest PyTorch tutorial video"
+Output:
+{
+  "sources": ["youtube", "duckduckgo"],
+  "queries": {
+    "youtube": "PyTorch tutorial 2025 deep learning",
+    "duckduckgo": "PyTorch tutorial video download"
+  },
+  "content_type": "video",
+  "estimated_results": 50,
+  "confidence": "high"
+}
+</example>
+
+<example>
+Input: "Convert my PDF to Word document"  (Edge case - conversion request)
+Output:
+{
+  "sources": [],
+  "queries": {},
+  "content_type": "mixed",
+  "estimated_results": 0,
+  "confidence": "high",
+  "note": "This is a conversion request, not a search. The app's /api/convert endpoint handles this."
+}
+</example>

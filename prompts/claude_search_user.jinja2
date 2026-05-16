@@ -1,0 +1,24 @@
+<user_request>
+{{ user_input }}
+</user_request>
+
+<context>
+Current timestamp: {{ current_time }}
+Available content types: video, paper, ebook, audio, mixed
+</context>
+
+<instructions>
+1. Determine which of the 7 sources are appropriate based on selection_rules
+2. Optimize the search query for each selected source
+3. Output ONLY valid JSON inside <output> tags
+4. Include confidence level based on query clarity
+
+Quick reference:
+- "video" → prioritize YouTube, Internet Archive
+- "paper" → arXiv, OpenAlex, DOAJ
+- "ebook" → Gutenberg, Internet Archive
+- "tutorial" → YouTube, DuckDuckGo
+- Academic non-STEM → OpenAlex, DOAJ (NOT arXiv)
+</instructions>
+
+Respond with JSON only, no additional text.
