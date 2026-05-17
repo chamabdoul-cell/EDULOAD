@@ -41,6 +41,28 @@ class TestFallbackRouting:
         result = fallback_routing("any query")
         assert result["fallback"] is True
 
+    def test_french_query_triggers_hal(self):
+        result = fallback_routing("recherche sur les transformeurs en apprentissage automatique")
+        assert "hal" in result["sources"]
+        assert result["query_language"] == "fr"
+
+    def test_french_accents_detected(self):
+        result = fallback_routing("étude sur l'économie africaine")
+        assert result["query_language"] == "fr"
+        assert "hal" in result["sources"]
+
+    def test_french_humanities_triggers_persee_openedition(self):
+        result = fallback_routing("histoire de la société française au 19ème siècle")
+        assert "persee" in result["sources"] or "openedition" in result["sources"]
+
+    def test_french_quebec_triggers_erudit(self):
+        result = fallback_routing("sociologie québécoise contemporaine")
+        assert "erudit" in result["sources"]
+
+    def test_english_query_language_is_en(self):
+        result = fallback_routing("machine learning neural networks")
+        assert result["query_language"] == "en"
+
 
 class TestAISearchRouter:
 

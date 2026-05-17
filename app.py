@@ -18,6 +18,29 @@ from core.ai_router import AISearchRouter
 from core.fallback import fallback_routing
 from config.settings import AIConfig
 
+# ── Bilingual helpers ─────────────────────────────────────────────
+
+def _get_lang(request: Request) -> str:
+    return request.headers.get("Accept-Language", "en")[:2].lower()
+
+_MESSAGES: dict[str, dict[str, str]] = {
+    "download_not_allowed": {
+        "en": "URL not from an allowed open-access source. Allowed: arxiv.org, doaj.org, archive.org, hal.science, and others.",
+        "fr": "Cette URL ne provient pas d'une source en libre accès autorisée. Autorisées : arxiv.org, doaj.org, archive.org, hal.science, et autres.",
+    },
+    "no_query": {
+        "en": "No query provided.",
+        "fr": "Aucune requête fournie.",
+    },
+    "file_not_found": {
+        "en": "File not found",
+        "fr": "Fichier introuvable",
+    },
+}
+
+def _msg(key: str, lang: str) -> str:
+    return _MESSAGES.get(key, {}).get(lang) or _MESSAGES.get(key, {}).get("en") or key
+
 BASE_DIR   = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 DL_DIR     = BASE_DIR / "downloads"
@@ -389,14 +412,11 @@ def status():
 # Routes – Download
 # ══════════════════════════════════════════════════════════════════════════════
 @app.post("/api/download")
-def download_url(req: DownloadRequest):
-    url = req.url.strip()
+def download_url(req: DownloadRequest, request: Request):
+    url  = req.url.strip()
+    lang = _get_lang(request)
     if not _is_allowed_url(url):
-        raise HTTPException(
-            403,
-            "URL not from an allowed open-access source. "
-            "Allowed: arxiv.org, doaj.org, archive.org, gutenberg.org, openalex.org, hal.science, and more."
-        )
+        raise HTTPException(403, _msg("download_not_allowed", lang))
     job_id = _enqueue_job(url)
     return {"job_id": job_id, "status": "queued"}
 
@@ -596,9 +616,10 @@ def _get_ai_router() -> AISearchRouter:
 async def nl_search(request: Request):
     body = await request.json()
     user_query = body.get("text", body.get("query", ""))
+    lang = _get_lang(request)
 
     if not user_query:
-        return {"error": "No query provided", "results": []}
+        return {"error": _msg("no_query", lang), "results": []}
 
     router = _get_ai_router()
     routing = await router.route(user_query)

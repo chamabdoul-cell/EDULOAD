@@ -662,11 +662,12 @@ textarea { resize: vertical; min-height: 80px; }
   <div class="logo">
     <div>
       Schol<span class="logo-dot">ara</span>
-      <div class="logo-sub">Open Knowledge, Everywhere</div>
+      <div class="logo-sub" data-i18n="tagline">Open Knowledge, Everywhere</div>
     </div>
   </div>
   <div class="hdr-tools" id="toolBadges"></div>
-  <button class="hdr-btn" id="btnSettings">⚙ Settings</button>
+  <button class="hdr-btn" id="btnLang" title="Switch language / Changer de langue">FR</button>
+  <button class="hdr-btn" id="btnSettings" data-i18n="settings_btn">⚙ Settings</button>
 </header>
 
 <!-- ══ SHELL ════════════════════════════════════════════════════ -->
@@ -677,21 +678,21 @@ textarea { resize: vertical; min-height: 80px; }
 
   <div class="sidebar-section">
     <div class="tabs">
-      <button class="tab active" data-tab="search">🔍 Search</button>
-      <button class="tab" data-tab="url">🔗 URL</button>
-      <button class="tab" data-tab="convert">⚙️ Convert</button>
-      <button class="tab" data-tab="history">📋 History</button>
-      <button class="tab" data-tab="collections">🗂 Collections</button>
+      <button class="tab active" data-tab="search" data-i18n="search_tab">🔍 Search</button>
+      <button class="tab" data-tab="url" data-i18n="url_tab">🔗 URL</button>
+      <button class="tab" data-tab="convert" data-i18n="convert_tab">⚙️ Convert</button>
+      <button class="tab" data-tab="history" data-i18n="history_tab">📋 History</button>
+      <button class="tab" data-tab="collections" data-i18n="collections_tab">🗂 Collections</button>
     </div>
 
     <!-- Search panel -->
     <div class="tab-panel active" id="tab-search">
       <div class="field">
-        <label>Describe what you need</label>
-        <textarea id="nlInput" placeholder="e.g. lecture on Fourier analysis, or research paper on transformers, or classic French novel…"></textarea>
+        <label data-i18n="search_label">Describe what you need</label>
+        <textarea id="nlInput" data-i18n-placeholder="search_placeholder" placeholder="e.g. research paper on transformers, or classic French novel…"></textarea>
       </div>
       <div class="field">
-        <label>Sources</label>
+        <label data-i18n="sources_label">Sources</label>
         <div class="chk-group">
           <label class="chk-label"><input type="checkbox" name="src" value="arxiv" checked> 📄 arXiv</label>
           <label class="chk-label"><input type="checkbox" name="src" value="openalex" checked> 🔬 OpenAlex</label>
@@ -702,7 +703,7 @@ textarea { resize: vertical; min-height: 80px; }
       </div>
       <button class="btn btn-primary btn-full" id="btnSearch">
         <span class="spin" id="searchSpin"></span>
-        Search
+        <span data-i18n="search_btn">Search</span>
       </button>
       <div class="msg" id="searchMsg"></div>
     </div>
@@ -710,12 +711,12 @@ textarea { resize: vertical; min-height: 80px; }
     <!-- URL panel -->
     <div class="tab-panel" id="tab-url">
       <div class="field">
-        <label>Open-access URL (PDF, document, …)</label>
-        <input type="url" id="urlInput" placeholder="https://arxiv.org/pdf/… or https://archive.org/…">
+        <label data-i18n="url_label">Open-access URL (PDF, document, …)</label>
+        <input type="url" id="urlInput" data-i18n-placeholder="url_placeholder" placeholder="https://arxiv.org/pdf/… or https://archive.org/…">
       </div>
       <button class="btn btn-primary btn-full" id="btnDownload">
         <span class="spin" id="dlSpin"></span>
-        Download
+        <span data-i18n="download_btn">Download</span>
       </button>
       <div class="progress-wrap" id="urlProgress">
         <div class="progress-bar"><div class="progress-fill" id="urlProgressFill"></div></div>
@@ -732,11 +733,11 @@ textarea { resize: vertical; min-height: 80px; }
     <!-- Convert panel -->
     <div class="tab-panel" id="tab-convert">
       <div class="field">
-        <label>File in downloads</label>
-        <select id="convertFile"><option value="">— select file —</option></select>
+        <label data-i18n="convert_file_label">File in downloads</label>
+        <select id="convertFile"><option value="" data-i18n="select_file">— select file —</option></select>
       </div>
       <div class="field">
-        <label>Convert to</label>
+        <label data-i18n="convert_to_label">Convert to</label>
         <select id="convertTo">
           <option value="mp3">MP3 (from video)</option>
           <option value="pdf">PDF (from docx/html/md)</option>
@@ -745,14 +746,14 @@ textarea { resize: vertical; min-height: 80px; }
       </div>
       <button class="btn btn-primary btn-full" id="btnConvert">
         <span class="spin" id="convSpin"></span>
-        Convert
+        <span data-i18n="convert_btn">Convert</span>
       </button>
       <div class="msg" id="convMsg"></div>
     </div>
 
     <!-- History panel -->
     <div class="tab-panel" id="tab-history">
-      <button class="btn btn-secondary btn-full" id="btnRefreshHistory" style="margin-bottom:10px;font-size:0.75rem;padding:7px">
+      <button class="btn btn-secondary btn-full" id="btnRefreshHistory" style="margin-bottom:10px;font-size:0.75rem;padding:7px" data-i18n="history_refresh_btn">
         ↺ Refresh history
       </button>
       <div id="historyList">
@@ -763,7 +764,7 @@ textarea { resize: vertical; min-height: 80px; }
     <!-- Collections panel -->
     <div class="tab-panel" id="tab-collections">
       <div style="display:flex;gap:6px;margin-bottom:10px">
-        <button class="btn btn-primary" id="btnNewCollection" style="flex:1;font-size:0.75rem;padding:7px">
+        <button class="btn btn-primary" id="btnNewCollection" style="flex:1;font-size:0.75rem;padding:7px" data-i18n="new_collection_btn">
           + New Collection
         </button>
         <button class="btn btn-secondary" id="btnRefreshCollections" style="font-size:0.75rem;padding:7px">↺</button>
@@ -777,8 +778,8 @@ textarea { resize: vertical; min-height: 80px; }
   <!-- Active downloads & queue -->
   <div class="sidebar-section" id="queueSection" style="display:none">
     <div class="section-title">
-      Active Downloads
-      <button class="icon-btn" id="btnClearDone" style="margin-left:auto;font-size:0.65rem">✕ Clear done</button>
+      <span data-i18n="active_downloads">Active Downloads</span>
+      <button class="icon-btn" id="btnClearDone" style="margin-left:auto;font-size:0.65rem" data-i18n="clear_done">✕ Clear done</button>
     </div>
     <div id="queueList"></div>
   </div>
@@ -786,8 +787,8 @@ textarea { resize: vertical; min-height: 80px; }
   <!-- Downloads list -->
   <div class="sidebar-section" style="flex:1;overflow-y:auto;">
     <div class="section-title">
-      Downloads
-      <button class="icon-btn" id="refreshFiles" style="margin-left:auto;font-size:0.7rem">↺ refresh</button>
+      <span data-i18n="downloads_label">Downloads</span>
+      <button class="icon-btn" id="refreshFiles" style="margin-left:auto;font-size:0.7rem" data-i18n="refresh_btn">↺ refresh</button>
     </div>
     <div class="dl-list" id="dlList">
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No files yet.</div>
@@ -799,14 +800,14 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ── MAIN ──────────────────────────────────────────────────── -->
 <main class="main">
   <div class="results-bar">
-    <span class="results-label">Results</span>
+    <span class="results-label" data-i18n="results_label">Results</span>
     <span class="results-count" id="resCount" style="display:none"></span>
     <div class="filter-pills" id="filterPills"></div>
   </div>
   <div class="results-grid" id="resultsGrid">
-    <div class="empty-state">
+    <div class="empty-state" id="emptyState">
       <div class="big">📖</div>
-      <p>Search for open-access papers, books, or articles, or paste a direct URL — results appear here.</p>
+      <p data-i18n="empty_state_msg">Search for open-access papers, books, or articles, or paste a direct URL — results appear here.</p>
     </div>
   </div>
 </main>
@@ -820,7 +821,7 @@ textarea { resize: vertical; min-height: 80px; }
   <div class="viewer-body" id="viewerBody">
     <div class="viewer-placeholder" id="viewerPlaceholder">
       <div class="vp-icon">🔬</div>
-      <p>Open a file to preview it here</p>
+      <p data-i18n="viewer_placeholder">Open a file to preview it here</p>
     </div>
     <video  id="viewerVideo"  controls></video>
     <audio  id="viewerAudio"  controls></audio>
@@ -834,9 +835,9 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ══ QUICK DOWNLOAD MODAL ════════════════════════════════════ -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
-    <h2>Download Paper</h2>
+    <h2 data-i18n="download_paper_title">Download Paper</h2>
     <div class="field">
-      <label>URL</label>
+      <label data-i18n="url_label_short">URL</label>
       <input type="url" id="modalUrl" placeholder="auto-filled">
     </div>
     <div class="progress-wrap" id="modalProgress">
@@ -849,10 +850,10 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="progress-done" id="modalProgressDone"></div>
     </div>
     <div class="row2" style="margin-top:14px">
-      <button class="btn btn-secondary" id="modalCancel">Cancel</button>
+      <button class="btn btn-secondary" id="modalCancel" data-i18n="cancel_btn">Cancel</button>
       <button class="btn btn-primary"   id="modalConfirm">
         <span class="spin" id="modalSpin"></span>
-        Download
+        <span data-i18n="download_btn">Download</span>
       </button>
     </div>
     <div class="msg" id="modalMsg"></div>
@@ -862,18 +863,18 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ══ NEW COLLECTION MODAL ═════════════════════════════════════ -->
 <div class="modal-bg" id="collModalBg">
   <div class="modal" style="width:340px">
-    <h2>New Collection</h2>
+    <h2 data-i18n="new_collection_title">New Collection</h2>
     <div class="field">
-      <label>Name</label>
-      <input type="text" id="collName" placeholder="e.g. Linear Algebra Course">
+      <label data-i18n="coll_name_label">Name</label>
+      <input type="text" id="collName" data-i18n-placeholder="coll_name_placeholder" placeholder="e.g. Linear Algebra Course">
     </div>
     <div class="field">
-      <label>Description (optional)</label>
+      <label data-i18n="coll_desc_label">Description (optional)</label>
       <input type="text" id="collDesc" placeholder="">
     </div>
     <div class="row2" style="margin-top:14px">
-      <button class="btn btn-secondary" id="collModalCancel">Cancel</button>
-      <button class="btn btn-primary"   id="collModalConfirm">Create</button>
+      <button class="btn btn-secondary" id="collModalCancel" data-i18n="cancel_btn">Cancel</button>
+      <button class="btn btn-primary"   id="collModalConfirm" data-i18n="create_btn">Create</button>
     </div>
     <div class="msg" id="collModalMsg"></div>
   </div>
@@ -882,15 +883,15 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ══ ADD TO COLLECTION MODAL ══════════════════════════════════ -->
 <div class="modal-bg" id="addToCollModalBg">
   <div class="modal" style="width:340px">
-    <h2>Add to Collection</h2>
+    <h2 data-i18n="add_to_coll_title">Add to Collection</h2>
     <div class="field">
-      <label>Choose collection</label>
+      <label data-i18n="add_to_coll_label">Choose collection</label>
       <select id="addToCollSelect"><option value="">— select —</option></select>
     </div>
     <input type="hidden" id="addToCollHistoryId">
     <div class="row2" style="margin-top:14px">
-      <button class="btn btn-secondary" id="addToCollCancel">Cancel</button>
-      <button class="btn btn-primary"   id="addToCollConfirm">Add</button>
+      <button class="btn btn-secondary" id="addToCollCancel" data-i18n="cancel_btn">Cancel</button>
+      <button class="btn btn-primary"   id="addToCollConfirm" data-i18n="add_btn">Add</button>
     </div>
     <div class="msg" id="addToCollMsg"></div>
   </div>
@@ -899,20 +900,28 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ══ SETTINGS MODAL ════════════════════════════════════════════ -->
 <div class="modal-bg" id="settingsModalBg">
   <div class="modal" style="width:420px">
-    <h2>⚙ Settings</h2>
+    <h2 data-i18n="settings_title">⚙ Settings</h2>
 
     <div class="field">
-      <label>Download Directory</label>
+      <label data-i18n="settings_download_dir">Download Directory</label>
       <input type="text" id="settingDownloadDir" placeholder="./downloads">
     </div>
 
     <div class="field">
-      <label>Max Concurrent Downloads</label>
+      <label data-i18n="settings_max_concurrent">Max Concurrent Downloads</label>
       <input type="number" id="settingMaxConcurrent" min="1" max="10" value="3">
     </div>
 
     <div class="settings-row">
-      <label>Auto-open viewer after download</label>
+      <label data-i18n="settings_language">Language</label>
+      <div style="display:flex;gap:6px">
+        <button class="hdr-btn" id="settingLangEn" style="border-color:var(--teal);color:var(--teal)">EN</button>
+        <button class="hdr-btn" id="settingLangFr">FR</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <label data-i18n="settings_auto_open">Auto-open viewer after download</label>
       <label class="toggle">
         <input type="checkbox" id="settingAutoOpen" checked>
         <span class="toggle-slider"></span>
@@ -920,7 +929,7 @@ textarea { resize: vertical; min-height: 80px; }
     </div>
 
     <div class="settings-row">
-      <label>Dark mode</label>
+      <label data-i18n="settings_dark_mode">Dark mode</label>
       <label class="toggle">
         <input type="checkbox" id="settingDarkMode">
         <span class="toggle-slider"></span>
@@ -928,12 +937,167 @@ textarea { resize: vertical; min-height: 80px; }
     </div>
 
     <div style="text-align:right;margin-top:20px">
-      <button class="btn btn-secondary" id="settingsClose">Close</button>
+      <button class="btn btn-secondary" id="settingsClose" data-i18n="close_btn">Close</button>
     </div>
   </div>
 </div>
 
 <script>
+// ── i18n ─────────────────────────────────────────────────────────
+const TRANSLATIONS = {
+  en: {
+    tagline:             "Open Knowledge, Everywhere",
+    search_tab:          "🔍 Search",
+    url_tab:             "🔗 URL",
+    convert_tab:         "⚙️ Convert",
+    history_tab:         "📋 History",
+    collections_tab:     "🗂 Collections",
+    search_label:        "Describe what you need",
+    search_placeholder:  "e.g. research paper on transformers, or classic French novel…",
+    sources_label:       "Sources",
+    search_btn:          "Search",
+    url_label:           "Open-access URL (PDF, document, …)",
+    url_placeholder:     "https://arxiv.org/pdf/… or https://archive.org/…",
+    url_label_short:     "URL",
+    download_btn:        "Download",
+    download_paper_title:"Download Paper",
+    convert_file_label:  "File in downloads",
+    select_file:         "— select file —",
+    convert_to_label:    "Convert to",
+    convert_btn:         "Convert",
+    history_refresh_btn: "↺ Refresh history",
+    new_collection_btn:  "+ New Collection",
+    active_downloads:    "Active Downloads",
+    clear_done:          "✕ Clear done",
+    downloads_label:     "Downloads",
+    refresh_btn:         "↺ refresh",
+    results_label:       "Results",
+    settings_btn:        "⚙ Settings",
+    settings_title:      "⚙ Settings",
+    settings_download_dir:   "Download Directory",
+    settings_max_concurrent: "Max Concurrent Downloads",
+    settings_language:   "Language",
+    settings_auto_open:  "Auto-open viewer after download",
+    settings_dark_mode:  "Dark mode",
+    close_btn:           "Close",
+    new_collection_title:"New Collection",
+    coll_name_label:     "Name",
+    coll_name_placeholder:"e.g. Linear Algebra Course",
+    coll_desc_label:     "Description (optional)",
+    cancel_btn:          "Cancel",
+    create_btn:          "Create",
+    add_to_coll_title:   "Add to Collection",
+    add_to_coll_label:   "Choose collection",
+    add_btn:             "Add",
+    no_files:            "No files yet.",
+    no_history:          "No history yet.",
+    no_collections:      "No collections yet.",
+    no_results:          "No results. Try different keywords or sources.",
+    empty_state_msg:     "Search for open-access papers, books, or articles, or paste a direct URL — results appear here.",
+    viewer_placeholder:  "Open a file to preview it here",
+    viewer_no_file:      "No file open",
+    file_missing:        "file missing",
+    coll_delete_confirm: "Delete this collection and all its items?",
+    coll_missing_name:   "Enter a name.",
+    add_to_coll_missing: "Select a collection.",
+    url_required:        "Paste an open-access URL first.",
+    search_no_query:     "Enter a search query first.",
+    convert_no_file:     "Select a file first.",
+  },
+  fr: {
+    tagline:             "Le Savoir Ouvert, Partout",
+    search_tab:          "🔍 Recherche",
+    url_tab:             "🔗 URL",
+    convert_tab:         "⚙️ Convertir",
+    history_tab:         "📋 Historique",
+    collections_tab:     "🗂 Collections",
+    search_label:        "Décrivez ce dont vous avez besoin",
+    search_placeholder:  "ex. article sur les transformeurs, ou roman classique français…",
+    sources_label:       "Sources",
+    search_btn:          "Rechercher",
+    url_label:           "URL en libre accès (PDF, document, …)",
+    url_placeholder:     "https://arxiv.org/pdf/… ou https://archive.org/…",
+    url_label_short:     "URL",
+    download_btn:        "Télécharger",
+    download_paper_title:"Télécharger l'article",
+    convert_file_label:  "Fichier dans les téléchargements",
+    select_file:         "— sélectionner un fichier —",
+    convert_to_label:    "Convertir en",
+    convert_btn:         "Convertir",
+    history_refresh_btn: "↺ Actualiser l'historique",
+    new_collection_btn:  "+ Nouvelle collection",
+    active_downloads:    "Téléchargements actifs",
+    clear_done:          "✕ Effacer terminés",
+    downloads_label:     "Téléchargements",
+    refresh_btn:         "↺ actualiser",
+    results_label:       "Résultats",
+    settings_btn:        "⚙ Paramètres",
+    settings_title:      "⚙ Paramètres",
+    settings_download_dir:   "Répertoire de téléchargement",
+    settings_max_concurrent: "Téléchargements simultanés max",
+    settings_language:   "Langue",
+    settings_auto_open:  "Ouvrir automatiquement après téléchargement",
+    settings_dark_mode:  "Mode sombre",
+    close_btn:           "Fermer",
+    new_collection_title:"Nouvelle collection",
+    coll_name_label:     "Nom",
+    coll_name_placeholder:"ex. Cours d'algèbre linéaire",
+    coll_desc_label:     "Description (optionnelle)",
+    cancel_btn:          "Annuler",
+    create_btn:          "Créer",
+    add_to_coll_title:   "Ajouter à une collection",
+    add_to_coll_label:   "Choisir une collection",
+    add_btn:             "Ajouter",
+    no_files:            "Aucun fichier pour l'instant.",
+    no_history:          "Aucun historique pour l'instant.",
+    no_collections:      "Aucune collection pour l'instant.",
+    no_results:          "Aucun résultat. Essayez d'autres mots-clés ou sources.",
+    empty_state_msg:     "Recherchez des articles, livres ou sujets, ou collez une URL directe — les résultats s'affichent ici.",
+    viewer_placeholder:  "Ouvrez un fichier pour le prévisualiser ici",
+    viewer_no_file:      "Aucun fichier ouvert",
+    file_missing:        "fichier manquant",
+    coll_delete_confirm: "Supprimer cette collection et tous ses éléments ?",
+    coll_missing_name:   "Saisissez un nom.",
+    add_to_coll_missing: "Sélectionnez une collection.",
+    url_required:        "Collez d'abord une URL en libre accès.",
+    search_no_query:     "Saisissez une requête de recherche.",
+    convert_no_file:     "Sélectionnez d'abord un fichier.",
+  }
+};
+
+let currentLang = localStorage.getItem('lang') || 'fr';
+
+function t(key) {
+  return (TRANSLATIONS[currentLang] || {})[key] || (TRANSLATIONS['en'] || {})[key] || key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  // Update lang toggle button label — show the OTHER language as the switch target
+  const btnLang = document.getElementById('btnLang');
+  if (btnLang) btnLang.textContent = currentLang === 'fr' ? 'EN' : 'FR';
+  // Highlight active lang in Settings
+  const enBtn = document.getElementById('settingLangEn');
+  const frBtn = document.getElementById('settingLangFr');
+  if (enBtn && frBtn) {
+    const active = 'border-color:var(--teal);color:var(--teal)';
+    const inactive = '';
+    enBtn.style.cssText = currentLang === 'en' ? active : inactive;
+    frBtn.style.cssText = currentLang === 'fr' ? active : inactive;
+  }
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  localStorage.setItem('lang', lang);
+  applyTranslations();
+}
+
 const API = '';
 let allResults    = [];
 let activeFilter  = 'all';
@@ -995,7 +1159,7 @@ async function loadStatus() {
 function renderFileList(files) {
   const list = $('dlList');
   if (!files.length) {
-    list.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No files yet.</div>';
+    list.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">${t('no_files')}</div>`;
     return;
   }
   list.innerHTML = files.map(f => `
@@ -1163,7 +1327,7 @@ function renderResults() {
   count.style.display = filtered.length ? 'inline' : 'none';
 
   if (!filtered.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="big">🔍</div><p>No results. Try different keywords or sources.</p></div>';
+    grid.innerHTML = `<div class="empty-state"><div class="big">🔍</div><p>${t('no_results')}</p></div>`;
     return;
   }
 
@@ -1200,14 +1364,14 @@ function renderResults() {
 // ── URL Download ──────────────────────────────────────────────────
 $('btnDownload').addEventListener('click', async () => {
   const url = $('urlInput').value.trim();
-  if (!url) return showMsg($('dlMsg'), 'err', 'Paste an open-access URL first.');
+  if (!url) return showMsg($('dlMsg'), 'err', t('url_required'));
   $('dlSpin').classList.add('active');
   $('btnDownload').disabled = true;
   $('urlProgressFill').style.width = '0%';
   $('urlProgressPct').textContent = $('urlProgressSpeed').textContent = $('urlProgressEta').textContent = $('urlProgressDone').textContent = '';
   try {
     const r = await fetch('/api/download', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','Accept-Language':currentLang},
       body: JSON.stringify({url})
     });
     const d = await r.json();
@@ -1276,7 +1440,7 @@ $('modalConfirm').addEventListener('click', async () => {
 $('btnConvert').addEventListener('click', async () => {
   const file = $('convertFile').value;
   const to   = $('convertTo').value;
-  if (!file) return showMsg($('convMsg'), 'err', 'Select a file first.');
+  if (!file) return showMsg($('convMsg'), 'err', t('convert_no_file'));
   $('convSpin').classList.add('active');
   $('btnConvert').disabled = true;
   try {
@@ -1346,8 +1510,8 @@ $('closeViewer').addEventListener('click', () => {
   $('viewerVideo').style.display = $('viewerAudio').style.display =
   $('viewerIframe').style.display = $('viewerText').style.display = 'none';
   $('viewerPlaceholder').style.display = 'flex';
-  $('viewerPlaceholder').innerHTML = '<div class="vp-icon">🔬</div><p>Open a file to preview it here</p>';
-  $('viewerTitle').textContent = 'No file open';
+  $('viewerPlaceholder').innerHTML = `<div class="vp-icon">🔬</div><p>${t('viewer_placeholder')}</p>`;
+  $('viewerTitle').textContent = t('viewer_no_file');
 });
 
 // ── History ───────────────────────────────────────────────────────
@@ -1357,7 +1521,7 @@ async function loadHistory() {
 
 function renderHistory(items) {
   const el = $('historyList');
-  if (!items.length) { el.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No history yet.</div>'; return; }
+  if (!items.length) { el.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">${t('no_history')}</div>`; return; }
   el.innerHTML = items.map(h => {
     const date = (h.ts || '').slice(0, 10);
     const size = h.size_kb ? `${h.size_kb} KB` : '';
@@ -1368,7 +1532,7 @@ function renderHistory(items) {
         <span class="hist-source">${esc(h.source||'')}</span>
         <span>${date}</span>
         ${size ? `<span>${size}</span>` : ''}
-        ${!fileExists ? '<span style="color:#c0614a">file missing</span>' : ''}
+        ${!fileExists ? `<span style="color:#c0614a">${t('file_missing')}</span>` : ''}
       </div>
       ${h.tags ? `<div class="hist-tags"># ${esc(h.tags)}</div>` : ''}
       <div class="hist-actions">
@@ -1399,7 +1563,7 @@ async function loadCollections() {
 
 function renderCollections(cols) {
   const el = $('collectionsList');
-  if (!cols.length) { el.innerHTML = '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No collections yet.</div>'; return; }
+  if (!cols.length) { el.innerHTML = `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">${t('no_collections')}</div>`; return; }
   el.innerHTML = cols.map(c => `
     <div class="coll-item">
       <div class="coll-name">
@@ -1420,7 +1584,7 @@ $('collModalBg').addEventListener('click', e => { if(e.target===$('collModalBg')
 $('collModalConfirm').addEventListener('click', async () => {
   const name = $('collName').value.trim();
   const desc = $('collDesc').value.trim();
-  if (!name) return showMsg($('collModalMsg'), 'err', 'Enter a name.');
+  if (!name) return showMsg($('collModalMsg'), 'err', t('coll_missing_name'));
   try {
     const r = await fetch('/api/collections', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, description: desc})});
     if (!r.ok) throw new Error((await r.json()).detail || 'failed');
@@ -1431,7 +1595,7 @@ $('collModalConfirm').addEventListener('click', async () => {
 $('btnRefreshCollections').addEventListener('click', loadCollections);
 
 async function deleteCollection(id) {
-  if (!confirm('Delete this collection and all its items?')) return;
+  if (!confirm(t('coll_delete_confirm'))) return;
   await fetch(`/api/collections/${id}`, {method:'DELETE'});
   loadCollections();
 }
@@ -1458,7 +1622,7 @@ $('addToCollModalBg').addEventListener('click', e => { if(e.target===$('addToCol
 $('addToCollConfirm').addEventListener('click', async () => {
   const collId    = $('addToCollSelect').value;
   const historyId = $('addToCollHistoryId').value;
-  if (!collId) return showMsg($('addToCollMsg'), 'err', 'Select a collection.');
+  if (!collId) return showMsg($('addToCollMsg'), 'err', t('add_to_coll_missing'));
   try {
     const r = await fetch(`/api/collections/${collId}/items`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({history_id: parseInt(historyId)})});
     if (!r.ok) throw new Error('failed');
@@ -1496,6 +1660,9 @@ async function loadSettings() {
 $('btnSettings').addEventListener('click', () => $('settingsModalBg').classList.add('open'));
 $('settingsClose').addEventListener('click', () => $('settingsModalBg').classList.remove('open'));
 $('settingsModalBg').addEventListener('click', e => { if(e.target===$('settingsModalBg')) $('settingsModalBg').classList.remove('open'); });
+$('btnLang').addEventListener('click', () => setLang(currentLang === 'fr' ? 'en' : 'fr'));
+$('settingLangEn').addEventListener('click', () => setLang('en'));
+$('settingLangFr').addEventListener('click', () => setLang('fr'));
 
 $('settingDownloadDir').addEventListener('input', e => saveSetting('download_dir', e.target.value));
 $('settingMaxConcurrent').addEventListener('change', e => saveSetting('max_concurrent', e.target.value));
@@ -1510,6 +1677,7 @@ $('settingDarkMode').addEventListener('change', e => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────
+applyTranslations();
 loadStatus();
 loadSettings();
 setInterval(loadStatus, 15000);
