@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EduLoad</title>
+<title>Scholara</title>
+<!-- PWA -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#c8430b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scholara">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -653,8 +661,8 @@ textarea { resize: vertical; min-height: 80px; }
 <header>
   <div class="logo">
     <div>
-      Edu<span class="logo-dot">Load</span>
-      <div class="logo-sub">Educational Resource Hub</div>
+      Schol<span class="logo-dot">ara</span>
+      <div class="logo-sub">Open Knowledge, Everywhere</div>
     </div>
   </div>
   <div class="hdr-tools" id="toolBadges"></div>
@@ -671,7 +679,6 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="tabs">
       <button class="tab active" data-tab="search">🔍 Search</button>
       <button class="tab" data-tab="url">🔗 URL</button>
-      <button class="tab" data-tab="batch">📦 Batch</button>
       <button class="tab" data-tab="convert">⚙️ Convert</button>
       <button class="tab" data-tab="history">📋 History</button>
       <button class="tab" data-tab="collections">🗂 Collections</button>
@@ -686,13 +693,11 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="field">
         <label>Sources</label>
         <div class="chk-group">
-          <label class="chk-label"><input type="checkbox" name="src" value="youtube" checked> ▶️ YouTube</label>
           <label class="chk-label"><input type="checkbox" name="src" value="arxiv" checked> 📄 arXiv</label>
           <label class="chk-label"><input type="checkbox" name="src" value="openalex" checked> 🔬 OpenAlex</label>
           <label class="chk-label"><input type="checkbox" name="src" value="doaj" checked> 🔓 DOAJ</label>
           <label class="chk-label"><input type="checkbox" name="src" value="gutenberg" checked> 📚 Gutenberg</label>
           <label class="chk-label"><input type="checkbox" name="src" value="archive" checked> 🏛 Archive</label>
-          <label class="chk-label"><input type="checkbox" name="src" value="web" checked> 🌐 Web</label>
         </div>
       </div>
       <button class="btn btn-primary btn-full" id="btnSearch">
@@ -705,38 +710,8 @@ textarea { resize: vertical; min-height: 80px; }
     <!-- URL panel -->
     <div class="tab-panel" id="tab-url">
       <div class="field">
-        <label>URL (video, PDF, document, …)</label>
-        <input type="url" id="urlInput" placeholder="https://…">
-      </div>
-      <div class="row2">
-        <div class="field">
-          <label>Quality</label>
-          <select id="qualitySelect">
-            <option value="best">Best</option>
-            <option value="1080">1080p</option>
-            <option value="720">720p</option>
-            <option value="480">480p</option>
-            <option value="360">360p</option>
-            <option value="audio">Audio only</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Format</label>
-          <select id="fmtSelect">
-            <option value="mp4">MP4</option>
-            <option value="mp3">MP3</option>
-            <option value="original">Original</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label>Subtitles</label>
-        <div class="chk-group">
-          <label class="chk-label"><input type="checkbox" name="sub" value="en"> EN</label>
-          <label class="chk-label"><input type="checkbox" name="sub" value="fr"> FR</label>
-          <label class="chk-label"><input type="checkbox" name="sub" value="ar"> AR</label>
-          <label class="chk-label"><input type="checkbox" name="sub" value="es"> ES</label>
-        </div>
+        <label>Open-access URL (PDF, document, …)</label>
+        <input type="url" id="urlInput" placeholder="https://arxiv.org/pdf/… or https://archive.org/…">
       </div>
       <button class="btn btn-primary btn-full" id="btnDownload">
         <span class="spin" id="dlSpin"></span>
@@ -752,56 +727,6 @@ textarea { resize: vertical; min-height: 80px; }
         <div class="progress-done" id="urlProgressDone"></div>
       </div>
       <div class="msg" id="dlMsg"></div>
-    </div>
-
-    <!-- Batch panel -->
-    <div class="tab-panel" id="tab-batch">
-      <div class="field">
-        <label>URLs (one per line)</label>
-        <textarea id="batchUrls" style="min-height:100px"
-          placeholder="https://www.youtube.com/watch?v=...
-https://arxiv.org/pdf/1706.03762.pdf
-https://archive.org/download/..."></textarea>
-      </div>
-      <div class="row2">
-        <div class="field">
-          <label>Quality</label>
-          <select id="batchQuality">
-            <option value="best">Best</option>
-            <option value="1080">1080p</option>
-            <option value="720">720p</option>
-            <option value="480">480p</option>
-            <option value="360">360p</option>
-            <option value="audio">Audio only</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Format</label>
-          <select id="batchFmt">
-            <option value="mp4">MP4</option>
-            <option value="mp3">MP3</option>
-            <option value="original">Original</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label>Subtitles</label>
-        <div class="chk-group">
-          <label class="chk-label"><input type="checkbox" name="bsub" value="en"> EN</label>
-          <label class="chk-label"><input type="checkbox" name="bsub" value="fr"> FR</label>
-          <label class="chk-label"><input type="checkbox" name="bsub" value="ar"> AR</label>
-          <label class="chk-label"><input type="checkbox" name="bsub" value="es"> ES</label>
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:10px">
-        <button class="btn btn-primary" id="btnQueueAll" style="flex:1">
-          <span class="spin" id="batchSpin"></span>
-          Queue All
-        </button>
-        <button class="btn btn-secondary" id="btnBatchClear" style="padding:7px 10px;font-size:0.75rem">Clear</button>
-      </div>
-      <div class="msg" id="batchMsg"></div>
-      <div id="batchJobList"></div>
     </div>
 
     <!-- Convert panel -->
@@ -881,7 +806,7 @@ https://archive.org/download/..."></textarea>
   <div class="results-grid" id="resultsGrid">
     <div class="empty-state">
       <div class="big">📖</div>
-      <p>Search for educational resources, paste a URL, or describe<br>what you need — results appear here.</p>
+      <p>Search for open-access papers, books, or articles, or paste a direct URL — results appear here.</p>
     </div>
   </div>
 </main>
@@ -909,37 +834,10 @@ https://archive.org/download/..."></textarea>
 <!-- ══ QUICK DOWNLOAD MODAL ════════════════════════════════════ -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
-    <h2>Quick Download</h2>
+    <h2>Download Paper</h2>
     <div class="field">
       <label>URL</label>
       <input type="url" id="modalUrl" placeholder="auto-filled">
-    </div>
-    <div class="row2">
-      <div class="field">
-        <label>Quality</label>
-        <select id="modalQuality">
-          <option value="best">Best</option>
-          <option value="1080">1080p</option>
-          <option value="720">720p</option>
-          <option value="audio">Audio only</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Format</label>
-        <select id="modalFmt">
-          <option value="mp4">MP4</option>
-          <option value="mp3">MP3</option>
-          <option value="original">Original</option>
-        </select>
-      </div>
-    </div>
-    <div class="field">
-      <label>Subtitles</label>
-      <div class="chk-group">
-        <label class="chk-label"><input type="checkbox" name="msub" value="en"> EN</label>
-        <label class="chk-label"><input type="checkbox" name="msub" value="fr"> FR</label>
-        <label class="chk-label"><input type="checkbox" name="msub" value="ar"> AR</label>
-      </div>
     </div>
     <div class="progress-wrap" id="modalProgress">
       <div class="progress-bar"><div class="progress-fill" id="modalProgressFill"></div></div>
@@ -1008,32 +906,9 @@ https://archive.org/download/..."></textarea>
       <input type="text" id="settingDownloadDir" placeholder="./downloads">
     </div>
 
-    <div class="row2">
-      <div class="field">
-        <label>Max Concurrent Downloads</label>
-        <input type="number" id="settingMaxConcurrent" min="1" max="10" value="3">
-      </div>
-      <div class="field">
-        <label>Default Quality</label>
-        <select id="settingDefaultQuality">
-          <option value="best">Best</option>
-          <option value="1080">1080p</option>
-          <option value="720">720p</option>
-          <option value="480">480p</option>
-          <option value="360">360p</option>
-          <option value="audio">Audio only</option>
-        </select>
-      </div>
-    </div>
-
     <div class="field">
-      <label>Default Subtitles</label>
-      <div class="chk-group">
-        <label class="chk-label"><input type="checkbox" name="settingSub" value="en"> EN</label>
-        <label class="chk-label"><input type="checkbox" name="settingSub" value="fr"> FR</label>
-        <label class="chk-label"><input type="checkbox" name="settingSub" value="ar"> AR</label>
-        <label class="chk-label"><input type="checkbox" name="settingSub" value="es"> ES</label>
-      </div>
+      <label>Max Concurrent Downloads</label>
+      <input type="number" id="settingMaxConcurrent" min="1" max="10" value="3">
     </div>
 
     <div class="settings-row">
@@ -1064,7 +939,6 @@ let allResults    = [];
 let activeFilter  = 'all';
 let currentFiles  = [];
 let activeEvtSources = {};
-let batchJobs     = [];
 window.autoOpenViewer = true;
 
 // ── Utility ─────────────────────────────────────────────────────
@@ -1103,17 +977,14 @@ async function loadStatus() {
     currentFiles = d.files || [];
     const tb = $('toolBadges');
     tb.innerHTML = '';
-    let ytVersion = '';
-    try {
-      const vr = await fetch('/api/ytdlp_version');
-      const vd = await vr.json();
-      ytVersion = vd.version ? ` v${vd.version}` : '';
-    } catch(_) {}
-    [['yt-dlp', d.tools.yt_dlp, ytVersion], ['ffmpeg', d.tools.ffmpeg, ''], ['pandoc', d.tools.pandoc, '']].forEach(([n,ok,tip]) => {
+    const aiLabel = d.ollama_available
+      ? `Ollama (${d.ollama_model || 'mistral'})`
+      : (d.deepseek_configured ? 'DeepSeek' : 'Keyword mode');
+    const aiOk = d.ollama_available || d.deepseek_configured;
+    [[aiLabel, aiOk], ['ffmpeg', d.tools.ffmpeg], ['pandoc', d.tools.pandoc]].forEach(([n,ok]) => {
       const b = document.createElement('span');
       b.className = 'tool-badge ' + (ok ? 'ok' : 'miss');
       b.textContent = ok ? `✓ ${n}` : `✗ ${n}`;
-      if (tip) b.title = n + tip;
       tb.appendChild(b);
     });
     renderFileList(d.files);
@@ -1260,11 +1131,6 @@ $('btnSearch').addEventListener('click', async () => {
 
 // ── Thumbnails ────────────────────────────────────────────────────
 function getCardBanner(r) {
-  if (r.source === 'YouTube') {
-    const m = (r.url || '').match(/[?&]v=([^&]+)/);
-    const id = m ? m[1] : null;
-    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : (r.thumbnail || null);
-  }
   if (r.source === 'Archive.org') {
     const parts = (r.url || '').replace(/\/$/, '').split('/');
     const id = parts[parts.length - 1];
@@ -1326,7 +1192,6 @@ function renderResults() {
       <div class="card-actions">
         ${r.url ? `<button class="card-btn" onclick="window.open('${esc(r.url)}','_blank')">🔗 Open</button>` : ''}
         ${r.pdf_url ? `<button class="card-btn dl" onclick="quickDownload('${esc(r.pdf_url)}')">⬇ Download</button>` : ''}
-        ${r.url && r.source==='YouTube' ? `<button class="card-btn dl" onclick="quickDownload('${esc(r.url)}')">⬇ Video</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1335,8 +1200,7 @@ function renderResults() {
 // ── URL Download ──────────────────────────────────────────────────
 $('btnDownload').addEventListener('click', async () => {
   const url = $('urlInput').value.trim();
-  if (!url) return showMsg($('dlMsg'), 'err', 'Paste a URL first.');
-  const subs = [...document.querySelectorAll('input[name=sub]:checked')].map(x => x.value);
+  if (!url) return showMsg($('dlMsg'), 'err', 'Paste an open-access URL first.');
   $('dlSpin').classList.add('active');
   $('btnDownload').disabled = true;
   $('urlProgressFill').style.width = '0%';
@@ -1344,7 +1208,7 @@ $('btnDownload').addEventListener('click', async () => {
   try {
     const r = await fetch('/api/download', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, quality: $('qualitySelect').value, fmt: $('fmtSelect').value, subs})
+      body: JSON.stringify({url})
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Download failed');
@@ -1380,14 +1244,13 @@ $('modalCancel').addEventListener('click', () => $('modalBg').classList.remove('
 $('modalBg').addEventListener('click', e => { if(e.target===$('modalBg')) $('modalBg').classList.remove('open'); });
 
 $('modalConfirm').addEventListener('click', async () => {
-  const url  = $('modalUrl').value.trim();
-  const subs = [...document.querySelectorAll('input[name=msub]:checked')].map(x => x.value);
+  const url = $('modalUrl').value.trim();
   $('modalSpin').classList.add('active');
   $('modalConfirm').disabled = true;
   try {
     const r = await fetch('/api/download', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, quality: $('modalQuality').value, fmt: $('modalFmt').value, subs})
+      body: JSON.stringify({url})
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'failed');
@@ -1408,75 +1271,6 @@ $('modalConfirm').addEventListener('click', async () => {
     $('modalConfirm').disabled = false;
   }
 });
-
-// ── Batch download ────────────────────────────────────────────────
-$('btnBatchClear').addEventListener('click', () => {
-  $('batchUrls').value = '';
-  $('batchJobList').innerHTML = '';
-  batchJobs = [];
-});
-
-$('btnQueueAll').addEventListener('click', async () => {
-  const lines = $('batchUrls').value.split('\n').map(l => l.trim()).filter(Boolean);
-  if (!lines.length) return showMsg($('batchMsg'), 'err', 'No URLs found.');
-  const subs = [...document.querySelectorAll('input[name=bsub]:checked')].map(x => x.value);
-  $('batchSpin').classList.add('active');
-  $('btnQueueAll').disabled = true;
-  try {
-    const r = await fetch('/api/batch', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({urls: lines, quality: $('batchQuality').value, fmt: $('batchFmt').value, subs})
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || 'Batch failed');
-    batchJobs = d.job_ids.map((id, i) => ({job_id: id, url: lines[i], status: 'queued', progress: 0}));
-    renderBatchJobList();
-    batchJobs.forEach((job, i) => trackBatchJob(job.job_id, i));
-    showMsg($('batchMsg'), 'ok', `Queued ${d.count} URLs.`);
-    renderQueuePanel();
-  } catch(e) {
-    showMsg($('batchMsg'), 'err', e.message);
-  } finally {
-    $('batchSpin').classList.remove('active');
-    $('btnQueueAll').disabled = false;
-  }
-});
-
-function renderBatchJobList() {
-  const el = $('batchJobList');
-  if (!batchJobs.length) { el.innerHTML = ''; return; }
-  const done  = batchJobs.filter(j => j.status === 'done').length;
-  const error = batchJobs.filter(j => j.status === 'error').length;
-  const total = batchJobs.length;
-  const summary = (done + error === total && total > 0)
-    ? `<div class="msg ok" style="display:block;margin-bottom:8px">${done} of ${total} downloaded successfully.</div>`
-    : '';
-  el.innerHTML = summary + batchJobs.map(j => {
-    const short = j.url.length > 45 ? j.url.slice(0, 43) + '…' : j.url;
-    const bar   = ['running','done'].includes(j.status)
-      ? `<div class="progress-bar" style="margin-top:3px"><div class="progress-fill" style="width:${j.progress||0}%"></div></div>`
-      : '';
-    const statusLabel = j.status === 'done' ? '✓' : j.status === 'error' ? '✗' : j.status;
-    return `<div class="queue-item">
-      <span class="q-url" title="${esc(j.url)}">${esc(short)}</span>
-      <span class="q-status ${j.status}">${statusLabel}</span>
-    </div>${bar}`;
-  }).join('');
-}
-
-function trackBatchJob(jobId, idx) {
-  const es = new EventSource(`/api/progress/${jobId}`);
-  es.onmessage = e => {
-    const d = JSON.parse(e.data);
-    if (idx < batchJobs.length) {
-      batchJobs[idx].status   = d.status;
-      batchJobs[idx].progress = d.progress || 0;
-    }
-    renderBatchJobList();
-    if (d.status === 'done' || d.status === 'error') { es.close(); loadStatus(); }
-  };
-  es.onerror = () => es.close();
-}
 
 // ── Convert ───────────────────────────────────────────────────────
 $('btnConvert').addEventListener('click', async () => {
@@ -1689,15 +1483,8 @@ async function loadSettings() {
       document.documentElement.setAttribute('data-theme', 'dark');
       $('settingDarkMode').checked = true;
     }
-    if (s.download_dir)     $('settingDownloadDir').value  = s.download_dir;
-    if (s.max_concurrent)   $('settingMaxConcurrent').value = s.max_concurrent;
-    if (s.default_quality)  { $('settingDefaultQuality').value = s.default_quality; $('qualitySelect').value = s.default_quality; }
-    if (s.default_subs) {
-      s.default_subs.split(',').forEach(lang => {
-        const cb = document.querySelector(`input[name=sub][value="${lang.trim()}"]`);
-        if (cb) cb.checked = true;
-      });
-    }
+    if (s.download_dir)   $('settingDownloadDir').value  = s.download_dir;
+    if (s.max_concurrent) $('settingMaxConcurrent').value = s.max_concurrent;
     if (s.auto_open_viewer !== undefined) {
       const val = s.auto_open_viewer !== 'false';
       $('settingAutoOpen').checked = val;
@@ -1712,16 +1499,6 @@ $('settingsModalBg').addEventListener('click', e => { if(e.target===$('settingsM
 
 $('settingDownloadDir').addEventListener('input', e => saveSetting('download_dir', e.target.value));
 $('settingMaxConcurrent').addEventListener('change', e => saveSetting('max_concurrent', e.target.value));
-$('settingDefaultQuality').addEventListener('change', e => {
-  saveSetting('default_quality', e.target.value);
-  $('qualitySelect').value = e.target.value;
-});
-document.querySelectorAll('input[name=settingSub]').forEach(cb => {
-  cb.addEventListener('change', () => {
-    const subs = [...document.querySelectorAll('input[name=settingSub]:checked')].map(x=>x.value).join(',');
-    saveSetting('default_subs', subs);
-  });
-});
 $('settingAutoOpen').addEventListener('change', e => {
   window.autoOpenViewer = e.target.checked;
   saveSetting('auto_open_viewer', String(e.target.checked));
@@ -1737,6 +1514,11 @@ loadStatus();
 loadSettings();
 setInterval(loadStatus, 15000);
 setInterval(renderQueuePanel, 2000);
+
+// ── PWA service worker ────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>

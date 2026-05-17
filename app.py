@@ -1,12 +1,11 @@
 """
-EduLoad — Educational Resource Downloader & Viewer
+Scholara — Open-Access Research Platform
 Run: python app.py
 """
 import os, re, json, shutil, subprocess, threading, webbrowser, sqlite3, time
 from uuid import uuid4
 from pathlib import Path
 from queue import Queue
-from typing import Optional
 import urllib.request, urllib.parse, urllib.error
 
 from fastapi import FastAPI, HTTPException, Body, Request
@@ -15,16 +14,24 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 
-from core.claude_router import ClaudeSearchRouter
-from core.downloader import downloader as _downloader
+from core.ai_router import AISearchRouter
+from core.fallback import fallback_routing
+from config.settings import AIConfig
 
 BASE_DIR   = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 DL_DIR     = BASE_DIR / "downloads"
-DB_PATH    = BASE_DIR / "adm_app.db"
+DB_PATH    = BASE_DIR / "scholara.db"
 DL_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="EduLoad")
+ALLOWED_DOWNLOAD_DOMAINS = [
+    "arxiv.org", "export.arxiv.org", "doaj.org", "openalex.org",
+    "gutenberg.org", "archive.org", "plos.org", "ncbi.nlm.nih.gov",
+    "biorxiv.org", "medrxiv.org", "hal.science", "persee.fr",
+    "openedition.org", "erudit.org", "africarxiv.org", "ajol.info",
+]
+
+app = FastAPI(title="Scholara")
 app.mount("/static",    StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/downloads", StaticFiles(directory=str(DL_DIR)),     name="downloads")
 
@@ -33,22 +40,16 @@ app.mount("/downloads", StaticFiles(directory=str(DL_DIR)),     name="downloads"
 # Models
 # ══════════════════════════════════════════════════════════════════════════════
 class DownloadRequest(BaseModel):
-    url:     str
-    quality: str = "best"
-    subs:    list[str] = []
-    fmt:     str = "mp4"
+    url: str
 
 class SearchRequest(BaseModel):
     query:   str
-    sources: list[str] = ["arxiv","gutenberg","doaj","youtube","openalex","archive","web"]
+    sources: list[str] = ["arxiv", "gutenberg", "doaj", "openalex", "archive"]
     limit:   int = 10
 
 class ConvertRequest(BaseModel):
     filename: str
     to_fmt:   str
-
-class NLRequest(BaseModel):
-    text: str
 
 class CollectionCreate(BaseModel):
     name:        str
@@ -60,12 +61,6 @@ class CollectionAddItem(BaseModel):
 
 class TagRequest(BaseModel):
     tags: str
-
-class BatchRequest(BaseModel):
-    urls:    list[str]
-    quality: str = "best"
-    subs:    list[str] = []
-    fmt:     str = "mp4"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -129,92 +124,33 @@ _dl_queue: Queue = Queue()
 _MAX_CONCURRENT = 3
 
 
+def _is_allowed_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.netloc.lower()
+        if host.startswith("www."):
+            host = host[4:]
+        return any(host == d or host.endswith("." + d) for d in ALLOWED_DOWNLOAD_DOMAINS)
+    except Exception:
+        return False
+
+
 def _run_download_job(job_id: str, req_data: dict):
-    job    = download_jobs[job_id]
+    job = download_jobs[job_id]
     job["status"] = "running"
     url    = req_data["url"]
     dl_dir = _get_download_dir()
 
-    is_video = any(x in url for x in
-                   ["youtube", "youtu.be", "vimeo", "dailymotion", "twitch", "tiktok"])
-
-    if is_video:
-        ytdlp_ok = _yt_dlp_available()
-
-        if ytdlp_ok:
-            out_tmpl = str(dl_dir / "%(title)s.%(ext)s")
-            cmd = ["yt-dlp", "--output", out_tmpl, "--no-playlist", "--newline"]
-
-            fmt     = req_data.get("fmt", "mp4")
-            quality = req_data.get("quality", "best")
-            if fmt == "mp3" or quality == "audio":
-                cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
-            else:
-                h = quality if str(quality).isdigit() else "1080"
-                cmd += ["-f", f"bestvideo[height<={h}]+bestaudio/best[height<={h}]",
-                        "--merge-output-format", "mp4"]
-
-            subs = req_data.get("subs", [])
-            if subs:
-                cmd += ["--write-subs", "--write-auto-subs",
-                        "--sub-langs", ",".join(subs), "--convert-subs", "srt"]
-            cmd.append(url)
-
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, bufsize=1)
-            dest = None
-            for line in (proc.stdout or []):
-                line = line.strip()
-                m = re.search(r'\[download\]\s+([\d.]+)%.*?at\s+(\S+)\s+ETA\s+(\S+)', line)
-                if m:
-                    job["progress"] = float(m.group(1))
-                    job["speed"]    = m.group(2)
-                    job["eta"]      = m.group(3)
-                for pat in [r'\[Merger\] Merging formats into "(.+?)"',
-                            r'\[download\] Destination: (.+)',
-                            r'\[ExtractAudio\] Destination: (.+)']:
-                    m2 = re.search(pat, line)
-                    if m2:
-                        dest = Path(m2.group(1)).name
-                        job["file"] = dest
-            proc.wait()
-            if proc.returncode == 0:
-                job["status"] = "done"
-                job["progress"] = 100
-                job["method"]   = "yt-dlp"
-                size_kb = 0
-                if dest and (dl_dir / dest).exists():
-                    size_kb = int((dl_dir / dest).stat().st_size / 1024)
-                _history_insert(url, dest, "YouTube", dest, size_kb)
-                return
-
-        # yt-dlp unavailable or failed — try Apify then Direct HTTP
-        job["error"] = ""
-        for fb_method, fb_fn, fb_label, fb_source in [
-            ("Apify API",   lambda: _downloader._download_apify(url, dl_dir),  "Apify API",   "Apify"),
-            ("Direct HTTP", lambda: _downloader._download_direct(url, dl_dir), "Direct HTTP", "Direct"),
-        ]:
-            res = fb_fn()
-            if res["success"]:
-                fname = res["file"]
-                job["status"]   = "done"
-                job["progress"] = 100
-                job["file"]     = fname
-                job["method"]   = fb_label
-                size_kb = int((dl_dir / fname).stat().st_size / 1024) if (dl_dir / fname).exists() else 0
-                _history_insert(url, fname, fb_source, fname, size_kb)
-                return
-
+    if not _is_allowed_url(url):
         job["status"] = "error"
-        job["error"]  = "All download methods failed (yt-dlp, Apify, Direct)"
+        job["error"]  = "URL not from an allowed open-access source."
         return
 
-    # direct file download with chunked progress
     try:
         parsed   = urllib.parse.urlparse(url)
-        filename = Path(parsed.path).name or "download"
+        filename = Path(parsed.path).name or "document"
         if not Path(filename).suffix:
-            filename += ".bin"
+            filename += ".pdf"
         dest_path = dl_dir / filename
         headers = {"User-Agent": "Mozilla/5.0"}
         req2 = urllib.request.Request(url, headers=headers)
@@ -256,23 +192,29 @@ def _worker():
 def _run(cmd, **kwargs):
     return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
-def _yt_dlp_available():
-    return shutil.which("yt-dlp") is not None
-
 def _ffmpeg_available():
     return shutil.which("ffmpeg") is not None
+
+def _ffmpeg_exe() -> str:
+    return shutil.which("ffmpeg") or "ffmpeg"
 
 def _pandoc_available():
     return shutil.which("pandoc") is not None
 
+def _check_ollama() -> bool:
+    try:
+        with urllib.request.urlopen(
+            f"{AIConfig.OLLAMA_URL}/api/tags", timeout=2
+        ) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
 def _tools_status():
     return {
-        "yt_dlp":  _yt_dlp_available(),
-        "ffmpeg":  _ffmpeg_available(),
-        "pandoc":  _pandoc_available(),
+        "ffmpeg": _ffmpeg_available(),
+        "pandoc": _pandoc_available(),
     }
-
-_ytdlp_info: dict = {"version": "unknown", "updated": False}
 
 def _get_download_dir() -> Path:
     try:
@@ -287,8 +229,7 @@ def _get_download_dir() -> Path:
         pass
     return DL_DIR
 
-def _enqueue_job(url: str, quality: str = "best", subs: list = None, fmt: str = "mp4") -> str:
-    subs = subs or []
+def _enqueue_job(url: str) -> str:
     job_id = uuid4().hex
     download_jobs[job_id] = {
         "job_id":   job_id,
@@ -300,46 +241,122 @@ def _enqueue_job(url: str, quality: str = "best", subs: list = None, fmt: str = 
         "eta":      "",
         "file":     "",
         "error":    "",
-        "method":   "",
+        "method":   "direct",
     }
-    _dl_queue.put((job_id, {"url": url, "quality": quality, "subs": subs, "fmt": fmt}))
+    _dl_queue.put((job_id, {"url": url}))
     return job_id
 
-def _auto_update_ytdlp():
-    try:
-        r = _run(["yt-dlp", "--version"])
-        if r.returncode == 0:
-            _ytdlp_info["version"] = r.stdout.strip()
-        _run(["yt-dlp", "-U"])
-        _ytdlp_info["updated"] = True
-        r2 = _run(["yt-dlp", "--version"])
-        if r2.returncode == 0:
-            _ytdlp_info["version"] = r2.stdout.strip()
-    except Exception:
-        pass
+
+# ── Document conversion helpers (pure-Python, no pandoc) ─────────────────────
+
+def _doc_to_html(src: Path) -> str:
+    ext = src.suffix.lower()
+    if ext in (".html", ".htm"):
+        return src.read_text(encoding="utf-8")
+    if ext == ".md":
+        try:
+            import markdown as md_lib
+            return md_lib.markdown(src.read_text(encoding="utf-8"), extensions=["tables", "fenced_code"])
+        except ImportError:
+            raise HTTPException(400, "markdown not installed — run: pip install markdown")
+    if ext == ".txt":
+        import html as html_lib
+        return f"<pre>{html_lib.escape(src.read_text(encoding='utf-8'))}</pre>"
+    if ext == ".docx":
+        try:
+            import mammoth
+            return mammoth.convert_to_html(open(str(src), "rb")).value
+        except ImportError:
+            raise HTTPException(400, "mammoth not installed — run: pip install mammoth")
+    raise HTTPException(400, f"Cannot read {ext} as source document")
+
+
+def _html_to_dest(html_str: str, dest: Path):
+    to = dest.suffix.lower()
+    if to in (".html", ".htm"):
+        dest.write_text(html_str, encoding="utf-8")
+        return
+    if to in (".txt", ".md"):
+        try:
+            import html2text as h2t
+        except ImportError:
+            raise HTTPException(400, "html2text not installed — run: pip install html2text")
+        h = h2t.HTML2Text()
+        h.body_width = 0
+        h.ignore_links = (to == ".txt")
+        dest.write_text(h.handle(html_str), encoding="utf-8")
+        return
+    if to == ".pdf":
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            raise HTTPException(400, "xhtml2pdf not installed — run: pip install xhtml2pdf")
+        with open(dest, "wb") as f:
+            res = pisa.CreatePDF(html_str, dest=f)
+        if res.err:
+            raise HTTPException(500, "xhtml2pdf: PDF creation failed")
+        return
+    if to == ".docx":
+        try:
+            from docx import Document
+            import html2text as h2t
+        except ImportError:
+            raise HTTPException(400, "python-docx / html2text not installed")
+        h = h2t.HTML2Text()
+        h.body_width = 0
+        text = h.handle(html_str)
+        doc = Document()
+        for para in text.split("\n\n"):
+            p = para.strip()
+            if p:
+                doc.add_paragraph(p)
+        doc.save(str(dest))
+        return
+    raise HTTPException(400, f"Unsupported output format: {to}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Startup
 # ══════════════════════════════════════════════════════════════════════════════
+def _generate_pwa_icons():
+    import struct, zlib
+    def _png(size):
+        bg = (0xC8, 0x43, 0x0B)
+        fg = (0xFF, 0xFF, 0xFF)
+        raw = []
+        for y in range(size):
+            row = [0]
+            cx, cy, r = size // 2, size // 2, size * 0.28
+            for x in range(size):
+                dist = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                row += list(fg if dist < r else bg)
+            raw.append(bytes(row))
+        def chunk(tag, data):
+            c = zlib.crc32(tag + data) & 0xFFFFFFFF
+            return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", c)
+        ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+        idat = zlib.compress(b"".join(raw))
+        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+    for sz, name in [(192, "icon-192.png"), (512, "icon-512.png")]:
+        p = STATIC_DIR / name
+        if not p.exists():
+            p.write_bytes(_png(sz))
+
+
 @app.on_event("startup")
 def startup_event():
     _init_db()
+    _generate_pwa_icons()
     for _ in range(_MAX_CONCURRENT):
         threading.Thread(target=_worker, daemon=True).start()
-    if _yt_dlp_available():
-        threading.Thread(target=_auto_update_ytdlp, daemon=True).start()
 
-    print("\n=== Downloader Status ===")
-    ytdlp_ver = _run(["yt-dlp", "--version"])
-    if ytdlp_ver.returncode == 0:
-        print(f"  [OK] yt-dlp v{ytdlp_ver.stdout.strip()}")
-    else:
-        print("  [--] yt-dlp: not available")
-    apify_tok = _downloader.apify_token
-    print(f"  {'[OK]' if apify_tok else '[--]'} Apify API: {'configured' if apify_tok else 'no token (disabled)'}")
+    ollama_ok = _check_ollama()
+    print("\n=== Scholara Status ===")
+    print(f"  {'[OK]' if ollama_ok else '[--]'} Ollama ({AIConfig.OLLAMA_MODEL})")
+    print(f"  {'[OK]' if AIConfig.DEEPSEEK_API_KEY else '[--]'} DeepSeek API")
+    print(f"  {'[OK]' if _ffmpeg_available() else '[--]'} ffmpeg (conversion)")
     print("  [OK] Direct HTTP: always available")
-    print("=========================\n")
+    print("======================\n")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -357,15 +374,15 @@ def status():
         if f.is_file():
             files.append({"name": f.name, "size": f.stat().st_size,
                           "ext": f.suffix.lower().lstrip(".")})
-    return {"tools": _tools_status(), "files": files}
-
-@app.get("/api/ytdlp_version")
-def ytdlp_version():
-    return _ytdlp_info
-
-@app.get("/api/download_stats")
-def download_stats():
-    return _downloader.get_stats()
+    ollama_ok = _check_ollama()
+    return {
+        "tools":               _tools_status(),
+        "files":               files,
+        "ollama_available":    ollama_ok,
+        "ollama_model":        AIConfig.OLLAMA_MODEL,
+        "deepseek_configured": bool(AIConfig.DEEPSEEK_API_KEY),
+        "ai_backend":          AIConfig.BACKEND,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -373,18 +390,15 @@ def download_stats():
 # ══════════════════════════════════════════════════════════════════════════════
 @app.post("/api/download")
 def download_url(req: DownloadRequest):
-    job_id = _enqueue_job(req.url.strip(), req.quality, req.subs, req.fmt)
+    url = req.url.strip()
+    if not _is_allowed_url(url):
+        raise HTTPException(
+            403,
+            "URL not from an allowed open-access source. "
+            "Allowed: arxiv.org, doaj.org, archive.org, gutenberg.org, openalex.org, hal.science, and more."
+        )
+    job_id = _enqueue_job(url)
     return {"job_id": job_id, "status": "queued"}
-
-@app.post("/api/batch")
-def batch_download(req: BatchRequest):
-    job_ids = []
-    for url in req.urls:
-        url = url.strip()
-        if not url:
-            continue
-        job_ids.append(_enqueue_job(url, req.quality, req.subs, req.fmt))
-    return {"job_ids": job_ids, "count": len(job_ids)}
 
 @app.get("/api/progress/{job_id}")
 def progress_sse(job_id: str):
@@ -445,6 +459,7 @@ def _search_arxiv(query, limit=5):
                 "url":     link.group(1).strip() if link else "",
                 "pdf_url": f"https://arxiv.org/pdf/{pdf_id}.pdf" if pdf_id else "",
                 "snippet": (summ.group(1).strip()[:200] if summ else ""),
+                "open_access": True,
             })
         return results
     except Exception as ex:
@@ -468,6 +483,7 @@ def _search_gutenberg(query, limit=5):
                 "url":     f"https://www.gutenberg.org/ebooks/{b['id']}",
                 "pdf_url": pdf or txt,
                 "snippet": f"Language: {', '.join(b.get('languages',[]))} | Subjects: {', '.join(b.get('subjects',[])[:3])}",
+                "open_access": True,
             })
         return results
     except Exception as ex:
@@ -490,45 +506,16 @@ def _search_doaj(query, limit=5):
                 "url":     link,
                 "pdf_url": link,
                 "snippet": bib.get("abstract", "")[:200],
+                "open_access": True,
             })
         return results
     except Exception as ex:
         return [{"source":"DOAJ","icon":"🔓","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
-def _search_youtube(query, limit=5):
-    if not _yt_dlp_available():
-        return []
-    cmd = ["yt-dlp", f"ytsearch{limit}:{query} educational",
-           "--print", "%(id)s\t%(title)s\t%(uploader)s\t%(duration_string)s",
-           "--no-download", "--no-warnings"]
-    try:
-        r = _run(cmd, timeout=20)
-        results = []
-        for line in r.stdout.strip().splitlines():
-            parts = line.split("\t")
-            if len(parts) < 2:
-                continue
-            vid_id   = parts[0]
-            title    = parts[1]
-            uploader = parts[2] if len(parts) > 2 else ""
-            duration = parts[3] if len(parts) > 3 else ""
-            results.append({
-                "source":    "YouTube", "icon": "▶️",
-                "title":     title,
-                "authors":   uploader,
-                "url":       f"https://www.youtube.com/watch?v={vid_id}",
-                "pdf_url":   "",
-                "snippet":   f"Duration: {duration}",
-                "thumbnail": f"https://img.youtube.com/vi/{vid_id}/mqdefault.jpg",
-            })
-        return results
-    except Exception as ex:
-        return [{"source":"YouTube","icon":"▶️","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
-
 def _search_openalex(query, limit=5):
     q   = urllib.parse.quote(query)
     url = (f"https://api.openalex.org/works?search={q}"
-           f"&filter=is_oa:true&per-page={limit}&mailto=app@adm_app.local")
+           f"&filter=is_oa:true&per-page={limit}&mailto=scholara@open.edu")
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
             data = json.loads(r.read())
@@ -544,6 +531,7 @@ def _search_openalex(query, limit=5):
                 "url":     doi or pdf,
                 "pdf_url": pdf,
                 "snippet": f"Cited by {w.get('cited_by_count',0)} | {w.get('publication_year','')}",
+                "open_access": True,
             })
         return results
     except Exception as ex:
@@ -552,56 +540,27 @@ def _search_openalex(query, limit=5):
 def _search_archive(query, limit=5):
     q   = urllib.parse.quote(query)
     url = (f"https://archive.org/advancedsearch.php"
-           f"?q={q}+AND+mediatype:(texts+OR+movies+OR+audio)"
+           f"?q={q}+AND+mediatype:texts"
            f"&fl[]=identifier,title,creator,description,mediatype"
            f"&rows={limit}&output=json")
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
             data = json.loads(r.read())
-        icon_map = {"texts": "📚", "movies": "🎬", "audio": "🎵"}
         results  = []
         for doc in data.get("response", {}).get("docs", []):
             idf = doc.get("identifier", "")
-            mt  = doc.get("mediatype", "texts")
             results.append({
-                "source":  "Archive.org", "icon": icon_map.get(mt, "📁"),
+                "source":  "Archive.org", "icon": "📚",
                 "title":   doc.get("title", "—"),
                 "authors": doc.get("creator", ""),
                 "url":     f"https://archive.org/details/{idf}",
-                "pdf_url": f"https://archive.org/download/{idf}/{idf}.pdf" if mt == "texts" else "",
+                "pdf_url": f"https://archive.org/download/{idf}/{idf}.pdf",
                 "snippet": (doc.get("description", "") or "")[:200],
+                "open_access": True,
             })
         return results
     except Exception as ex:
         return [{"source":"Archive.org","icon":"📚","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
-
-def _search_web(query, limit=5):
-    q   = urllib.parse.quote(query + " filetype:pdf OR site:archive.org OR open access")
-    url = f"https://html.duckduckgo.com/html/?q={q}"
-    try:
-        req2 = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req2, timeout=10) as r:
-            html = r.read().decode("utf-8", "ignore")
-        titles   = re.findall(r'class="result__title"[^>]*>.*?<a[^>]*>(.*?)</a>', html, re.DOTALL)
-        links    = re.findall(r'class="result__url"[^>]*>(.*?)<', html, re.DOTALL)
-        snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
-        results  = []
-        for i in range(min(limit, len(titles))):
-            clean = lambda s: re.sub(r'<[^>]+>', '', s).strip()
-            href  = links[i].strip() if i < len(links) else ""
-            if href and not href.startswith("http"):
-                href = "https://" + href
-            results.append({
-                "source":  "Web", "icon": "🌐",
-                "title":   clean(titles[i]),
-                "authors": "",
-                "url":     href,
-                "pdf_url": href if href.endswith(".pdf") else "",
-                "snippet": clean(snippets[i]) if i < len(snippets) else "",
-            })
-        return results
-    except Exception as ex:
-        return [{"source":"Web","icon":"🌐","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
 @app.post("/api/search")
 def search(req: SearchRequest):
@@ -610,10 +569,8 @@ def search(req: SearchRequest):
         "arxiv":     _search_arxiv,
         "gutenberg": _search_gutenberg,
         "doaj":      _search_doaj,
-        "youtube":   _search_youtube,
         "openalex":  _search_openalex,
         "archive":   _search_archive,
-        "web":       _search_web,
     }
     per = req.limit // max(len(req.sources), 1) + 2
     for src in req.sources:
@@ -626,47 +583,50 @@ def search(req: SearchRequest):
 # ══════════════════════════════════════════════════════════════════════════════
 # Routes – Natural Language → Search
 # ══════════════════════════════════════════════════════════════════════════════
+_ai_router: AISearchRouter | None = None
+
+def _get_ai_router() -> AISearchRouter:
+    global _ai_router
+    if _ai_router is None:
+        _ai_router = AISearchRouter()
+    return _ai_router
+
+
 @app.post("/api/nl_search")
 async def nl_search(request: Request):
-    """Natural language search using Claude for intelligent source routing"""
     body = await request.json()
-    user_query = body.get("query", "")
+    user_query = body.get("text", body.get("query", ""))
 
     if not user_query:
         return {"error": "No query provided", "results": []}
 
-    router = ClaudeSearchRouter()
-    routing = router.route(user_query)
+    router = _get_ai_router()
+    routing = await router.route(user_query)
 
     if not routing.get("sources"):
-        return {
-            "routing": routing,
-            "results": [],
-            "message": "This appears to be a conversion request. Use the /api/convert endpoint."
-        }
+        return {"routing": routing, "results": [], "message": "No sources selected."}
 
     results = []
     for source in routing["sources"]:
-        if source in routing.get("queries", {}):
-            results.extend(_search_source(source, routing["queries"][source]))
+        query = routing.get("queries", {}).get(source, user_query)
+        results.extend(_search_source(source, query))
 
     return {
-        "success": True,
-        "routing": routing,
-        "results": results[:50],
-        "claude_model": router.model
+        "success":    True,
+        "routing":    routing,
+        "results":    results[:50],
+        "ai_backend": AIConfig.BACKEND,
     }
 
 
 def _search_source(source: str, query: str) -> list:
     src_map = {
-        "youtube":          _search_youtube,
         "arxiv":            _search_arxiv,
         "gutenberg":        _search_gutenberg,
         "doaj":             _search_doaj,
         "openalex":         _search_openalex,
         "internet_archive": _search_archive,
-        "duckduckgo":       _search_web,
+        "archive":          _search_archive,
     }
     fn = src_map.get(source)
     return fn(query) if fn else []
@@ -683,23 +643,26 @@ def convert(req: ConvertRequest):
         raise HTTPException(404, f"File not found: {req.filename}")
 
     ext  = src.suffix.lower()
-    to   = req.to_fmt.lower()
+    to   = req.to_fmt.lower().lstrip(".")
     dest = dl_dir / f"{src.stem}_converted.{to}"
 
-    if ext in (".mp4", ".webm", ".mkv", ".avi") and to == "mp3":
+    VIDEO_EXTS   = {".mp4", ".webm", ".avi", ".mov", ".mkv", ".flv"}
+    AUDIO_CODECS = {"wav": "pcm_s16le", "aac": "aac", "ogg": "libvorbis", "flac": "flac"}
+    DOC_EXTS     = {".docx", ".html", ".htm", ".md", ".txt"}
+
+    if ext in VIDEO_EXTS and to in ("mp3", "wav", "aac", "ogg", "flac"):
         if not _ffmpeg_available():
-            raise HTTPException(400, "ffmpeg not installed")
-        r = _run(["ffmpeg", "-y", "-i", str(src), "-vn", "-acodec", "libmp3lame",
-                  "-ab", "192k", str(dest)])
+            raise HTTPException(400, "ffmpeg not available — install ffmpeg")
+        codec = "libmp3lame" if to == "mp3" else AUDIO_CODECS[to]
+        extra = ["-ab", "192k"] if to == "mp3" else []
+        r = _run([_ffmpeg_exe(), "-y", "-i", str(src), "-vn", "-acodec", codec] + extra + [str(dest)])
         if r.returncode != 0:
             raise HTTPException(500, r.stderr[-400:])
 
-    elif to == "pdf" and ext in (".docx", ".html", ".htm", ".md", ".odt"):
-        if not _pandoc_available():
-            raise HTTPException(400, "pandoc not installed")
-        r = _run(["pandoc", str(src), "-o", str(dest), "--pdf-engine=weasyprint"])
-        if r.returncode != 0:
-            r = _run(["pandoc", str(src), "-o", str(dest)])
+    elif ext in VIDEO_EXTS and to in ("mp4", "webm", "avi", "mkv", "mov"):
+        if not _ffmpeg_available():
+            raise HTTPException(400, "ffmpeg not available — install ffmpeg")
+        r = _run([_ffmpeg_exe(), "-y", "-i", str(src), str(dest)])
         if r.returncode != 0:
             raise HTTPException(500, r.stderr[-400:])
 
@@ -707,20 +670,32 @@ def convert(req: ConvertRequest):
         try:
             from pdf2docx import Converter
         except ImportError:
-            raise HTTPException(400, "pdf2docx not installed. Run: pip install pdf2docx")
+            raise HTTPException(400, "pdf2docx not installed — run: pip install pdf2docx")
         cv = Converter(str(src))
         cv.convert(str(dest))
         cv.close()
 
-    elif ext in (".html", ".htm") and to == "docx":
-        if not _pandoc_available():
-            raise HTTPException(400, "pandoc not installed")
-        r = _run(["pandoc", str(src), "-o", str(dest)])
-        if r.returncode != 0:
-            raise HTTPException(500, r.stderr[-400:])
+    elif ext == ".pdf" and to in ("txt", "html"):
+        try:
+            import pypdf
+            import html as html_lib
+        except ImportError:
+            raise HTTPException(400, "pypdf not installed — run: pip install pypdf")
+        reader = pypdf.PdfReader(str(src))
+        text   = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+        if to == "txt":
+            dest.write_text(text, encoding="utf-8")
+        else:
+            dest.write_text(f"<pre>{html_lib.escape(text)}</pre>", encoding="utf-8")
+
+    elif ext in DOC_EXTS and to in ("html", "htm", "txt", "md", "pdf", "docx"):
+        html_str = _doc_to_html(src)
+        _html_to_dest(html_str, dest)
 
     else:
-        raise HTTPException(400, f"Conversion {ext} → .{to} not supported")
+        raise HTTPException(400,
+            f"Conversion {ext}→.{to} not supported. "
+            "Supported: video→mp3/wav, pdf→docx/txt/html, docx/md/html/txt↔pdf/docx/md/html/txt")
 
     return {"status": "ok", "file": dest.name}
 
@@ -871,7 +846,7 @@ def _open_browser():
 
 if __name__ == "__main__":
     print("=" * 54)
-    print("  EduLoad — Educational Resource Downloader")
+    print("  Scholara — Open Knowledge, Everywhere")
     print("  http://127.0.0.1:7860")
     print("=" * 54)
     threading.Thread(target=_open_browser, daemon=True).start()

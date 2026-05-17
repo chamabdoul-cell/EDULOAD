@@ -1,80 +1,81 @@
-#!/usr/bin/env python3
-"""Test suite for Claude-powered search routing"""
-
-import time
+"""Tests for AI-powered search routing."""
+import asyncio
 import pytest
-from core.claude_router import ClaudeSearchRouter
+from unittest.mock import AsyncMock, patch
+from core.ai_router import AISearchRouter, _parse_routing
+from core.fallback import fallback_routing
 
 
-class TestClaudeSearchRouter:
+class TestParseRouting:
 
-    @pytest.fixture
-    def router(self):
-        return ClaudeSearchRouter()
+    def test_parses_valid_json(self):
+        raw = '{"sources": ["arxiv"], "queries": {"arxiv": "q"}, "confidence": "high"}'
+        result = _parse_routing(raw)
+        assert result["sources"] == ["arxiv"]
 
-    def test_video_query(self, router):
-        result = router.route("Find Python programming tutorials")
-        assert "youtube" in result["sources"] or "duckduckgo" in result["sources"]
-        assert result["content_type"] in ["video", "mixed"]
-        assert "confidence" in result
+    def test_parses_xml_wrapped_json(self):
+        raw = '<output>{"sources": ["doaj"], "confidence": "medium"}</output>'
+        result = _parse_routing(raw)
+        assert result["sources"] == ["doaj"]
 
-    def test_academic_query(self, router):
-        result = router.route("Download research papers about quantum computing")
-        assert any(s in result["sources"] for s in ["arxiv", "openalex", "doaj"])
-        assert result["content_type"] in ["paper", "mixed"]
-
-    def test_ebook_query(self, router):
-        result = router.route("Get me classic novels by Jane Austen")
-        assert "gutenberg" in result["sources"] or "internet_archive" in result["sources"]
-        assert result["content_type"] == "ebook"
-
-    def test_conversion_request(self, router):
-        result = router.route("Convert my PDF to Word")
-        assert result.get("sources") == [] or result.get("note") is not None
-
-    def test_cache_works(self, router):
-        query = "Same query multiple times"
-        start = time.time()
-        result1 = router.route(query)
-        time1 = time.time() - start
-
-        start = time.time()
-        result2 = router.route(query)
-        time2 = time.time() - start
-
-        assert time2 < time1
-        assert result1 == result2
-
-    def test_fallback_on_bad_key(self, router):
-        import os
-        original = os.environ.get("ANTHROPIC_API_KEY")
-        os.environ["ANTHROPIC_API_KEY"] = "invalid_key"
-        try:
-            result = router.route("Test query")
-            assert result.get("fallback") is True or "sources" in result
-        finally:
-            if original:
-                os.environ["ANTHROPIC_API_KEY"] = original
+    def test_returns_empty_on_bad_input(self):
+        result = _parse_routing("not json at all")
+        assert result == {}
 
 
-def run_manual_tests():
-    router = ClaudeSearchRouter()
-    queries = [
-        "Find machine learning tutorials on YouTube",
-        "Download research papers about climate change",
-        "Get me classic books by Mark Twain",
-        "Show me videos about cooking",
-        "Convert my document to PDF",
-    ]
-    print("\n=== Testing Claude Search Router ===\n")
-    for query in queries:
-        print(f"Query: {query}")
-        result = router.route(query)
-        print(f"Sources: {result.get('sources', [])}")
-        print(f"Content type: {result.get('content_type', 'N/A')}")
-        print(f"Confidence: {result.get('confidence', 'N/A')}")
-        print("-" * 50)
+class TestFallbackRouting:
+
+    def test_academic_keywords_trigger_arxiv(self):
+        result = fallback_routing("research paper on transformers")
+        assert "arxiv" in result["sources"]
+
+    def test_book_keywords_trigger_gutenberg(self):
+        result = fallback_routing("classic novel by Balzac")
+        assert "gutenberg" in result["sources"]
+
+    def test_unknown_query_defaults_to_arxiv_openalex(self):
+        result = fallback_routing("some random query")
+        assert "arxiv" in result["sources"] or "openalex" in result["sources"]
+
+    def test_fallback_flag_is_set(self):
+        result = fallback_routing("any query")
+        assert result["fallback"] is True
 
 
-if __name__ == "__main__":
-    run_manual_tests()
+class TestAISearchRouter:
+
+    def test_router_falls_back_to_keyword(self):
+        router = AISearchRouter()
+        # With no Ollama and no DeepSeek key, should fall back
+        with patch.object(router, "_route_ollama", new=AsyncMock(return_value=None)):
+            with patch.object(router, "_route_deepseek", new=AsyncMock(return_value=None)):
+                result = asyncio.get_event_loop().run_until_complete(
+                    router.route("research paper on transformers")
+                )
+        assert "sources" in result
+        assert result["fallback"] is True
+
+    def test_router_uses_ollama_when_available(self):
+        router = AISearchRouter()
+        mock_result = {"sources": ["arxiv"], "queries": {"arxiv": "transformers"}, "confidence": "high"}
+        with patch.object(router, "_route_ollama", new=AsyncMock(return_value=mock_result)):
+            result = asyncio.get_event_loop().run_until_complete(
+                router.route("research paper on transformers")
+            )
+        assert result["sources"] == ["arxiv"]
+
+    def test_router_caches_results(self):
+        router = AISearchRouter()
+        mock_result = {"sources": ["openalex"], "queries": {}, "confidence": "high"}
+        call_count = 0
+
+        async def mock_ollama(q):
+            nonlocal call_count
+            call_count += 1
+            return mock_result
+
+        with patch.object(router, "_route_ollama", side_effect=mock_ollama):
+            asyncio.get_event_loop().run_until_complete(router.route("same query"))
+            asyncio.get_event_loop().run_until_complete(router.route("same query"))
+
+        assert call_count == 1  # second call should hit cache

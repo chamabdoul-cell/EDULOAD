@@ -1,0 +1,29 @@
+{
+  "name": "Scholara",
+  "short_name": "Scholara",
+  "description": "Open-access academic research platform — search, download, and annotate papers",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1814",
+  "theme_color": "#c8430b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Search", "url": "/?tab=search", "description": "Search open-access papers" },
+    { "name": "Convert", "url": "/?tab=convert", "description": "Convert a file" }
+  ],
+  "categories": ["education", "productivity"]
+}

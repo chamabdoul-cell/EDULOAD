@@ -2,14 +2,12 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv("config/.env")
-load_dotenv()  # fallback to root .env
+load_dotenv()
 
 
-class ClaudeConfig:
-    API_KEY = os.getenv("ANTHROPIC_API_KEY")
-    MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-20241022")
-    HAIKU_MODEL = "claude-3-5-haiku-20241022"
-    CACHE_TTL = int(os.getenv("CLAUDE_CACHE_TTL", 300))
-    FALLBACK_ENABLED = os.getenv("CLAUDE_FALLBACK_ENABLED", "true").lower() == "true"
-    MAX_TOKENS = 1024
-    TEMPERATURE = 0.1
+class AIConfig:
+    BACKEND          = os.getenv("AI_BACKEND", "ollama")   # 'ollama' | 'deepseek' | 'fallback'
+    OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "mistral")
+    OLLAMA_URL       = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+    CACHE_TTL        = int(os.getenv("AI_CACHE_TTL", "300"))
