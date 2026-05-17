@@ -8,11 +8,12 @@ from pathlib import Path
 from queue import Queue
 import urllib.request, urllib.parse, urllib.error
 
-from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi import FastAPI, HTTPException, Body, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
+import httpx
 
 from core.ai_router import AISearchRouter
 from core.fallback import fallback_routing
@@ -63,7 +64,12 @@ app.mount("/downloads", StaticFiles(directory=str(DL_DIR)),     name="downloads"
 # Models
 # ══════════════════════════════════════════════════════════════════════════════
 class DownloadRequest(BaseModel):
-    url: str
+    url:      str
+    title:    str = ""
+    authors:  list[str] = []
+    year:     int | None = None
+    journal:  str = ""
+    language: str = ""
 
 class SearchRequest(BaseModel):
     query:   str
@@ -122,15 +128,41 @@ def _init_db():
         key   TEXT PRIMARY KEY,
         value TEXT
     )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS download_queue (
+        job_id          TEXT PRIMARY KEY,
+        url             TEXT NOT NULL,
+        status          TEXT DEFAULT 'queued',
+        progress        REAL DEFAULT 0,
+        error           TEXT,
+        result_filename TEXT,
+        created_at      TEXT DEFAULT (datetime('now')),
+        updated_at      TEXT DEFAULT (datetime('now'))
+    )""")
+    con.commit()
+
+    # Migrate history table — add citation columns if missing
+    existing = {row[1] for row in con.execute("PRAGMA table_info(history)")}
+    for col, typedef in [
+        ("authors",  "TEXT"),
+        ("year",     "INTEGER"),
+        ("journal",  "TEXT"),
+        ("language", "TEXT"),
+    ]:
+        if col not in existing:
+            con.execute(f"ALTER TABLE history ADD COLUMN {col} {typedef}")
     con.commit()
     con.close()
 
-def _history_insert(url, title, source, filename, size_kb):
+def _history_insert(url, title, source, filename, size_kb,
+                    authors=None, year=None, journal=None, language=None):
     try:
+        authors_str = json.dumps(authors) if authors else None
         con = _db()
         cur = con.execute(
-            "INSERT INTO history (url,title,source,filename,size_kb) VALUES (?,?,?,?,?)",
-            (url, title or filename, source, filename, size_kb))
+            """INSERT INTO history (url,title,source,filename,size_kb,authors,year,journal,language)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (url, title or filename, source, filename, size_kb,
+             authors_str, year, journal, language))
         rowid = cur.lastrowid
         con.commit()
         con.close()
@@ -140,11 +172,63 @@ def _history_insert(url, title, source, filename, size_kb):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Download Queue
+# Persistent Download Queue
 # ══════════════════════════════════════════════════════════════════════════════
 download_jobs: dict[str, dict] = {}
 _dl_queue: Queue = Queue()
 _MAX_CONCURRENT = 3
+
+
+def _enqueue_job_db(job_id: str, url: str):
+    try:
+        con = _db()
+        con.execute("INSERT OR IGNORE INTO download_queue (job_id, url) VALUES (?, ?)", (job_id, url))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
+
+def _update_job_db(job_id: str, status: str = None, progress: float = None,
+                   error: str = None, filename: str = None):
+    try:
+        updates = ["updated_at = datetime('now')"]
+        params  = []
+        if status   is not None: updates.append("status = ?");          params.append(status)
+        if progress is not None: updates.append("progress = ?");        params.append(progress)
+        if error    is not None: updates.append("error = ?");           params.append(error)
+        if filename is not None: updates.append("result_filename = ?"); params.append(filename)
+        params.append(job_id)
+        con = _db()
+        con.execute(f"UPDATE download_queue SET {', '.join(updates)} WHERE job_id = ?", params)
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
+
+def _load_jobs_from_db():
+    """On startup: restore queued/running jobs into memory and re-enqueue them."""
+    try:
+        con = _db()
+        rows = con.execute(
+            "SELECT job_id, url FROM download_queue WHERE status IN ('queued','running')"
+        ).fetchall()
+        con.execute(
+            "UPDATE download_queue SET status='queued' WHERE status='running'"
+        )
+        con.commit()
+        con.close()
+        for row in rows:
+            job_id, url = row["job_id"], row["url"]
+            download_jobs[job_id] = {
+                "job_id": job_id, "url": url, "status": "queued",
+                "position": 0, "progress": 0, "speed": "", "eta": "",
+                "file": "", "error": "", "method": "direct",
+            }
+            _dl_queue.put((job_id, {"url": url}))
+    except Exception:
+        pass
 
 
 def _is_allowed_url(url: str) -> bool:
@@ -161,12 +245,14 @@ def _is_allowed_url(url: str) -> bool:
 def _run_download_job(job_id: str, req_data: dict):
     job = download_jobs[job_id]
     job["status"] = "running"
+    _update_job_db(job_id, status="running")
     url    = req_data["url"]
     dl_dir = _get_download_dir()
 
     if not _is_allowed_url(url):
         job["status"] = "error"
         job["error"]  = "URL not from an allowed open-access source."
+        _update_job_db(job_id, status="error", error=job["error"])
         return
 
     try:
@@ -188,16 +274,26 @@ def _run_download_job(job_id: str, req_data: dict):
                     f.write(chunk)
                     downloaded += len(chunk)
                     if total:
-                        job["progress"] = round(downloaded / total * 100, 1)
+                        pct = round(downloaded / total * 100, 1)
+                        job["progress"] = pct
+                        _update_job_db(job_id, progress=pct)
         job["status"]   = "done"
         job["progress"] = 100
         job["file"]     = filename
+        _update_job_db(job_id, status="done", progress=100, filename=filename)
+
         source  = urllib.parse.urlparse(url).netloc or "Direct"
         size_kb = int(dest_path.stat().st_size / 1024)
-        _history_insert(url, filename, source, filename, size_kb)
+        meta = req_data.get("meta", {})
+        _history_insert(
+            url, meta.get("title") or filename, source, filename, size_kb,
+            authors=meta.get("authors"), year=meta.get("year"),
+            journal=meta.get("journal"), language=meta.get("language"),
+        )
     except Exception as e:
         job["status"] = "error"
         job["error"]  = str(e)
+        _update_job_db(job_id, status="error", error=str(e))
 
 
 def _worker():
@@ -224,21 +320,6 @@ def _ffmpeg_exe() -> str:
 def _pandoc_available():
     return shutil.which("pandoc") is not None
 
-def _check_ollama() -> bool:
-    try:
-        with urllib.request.urlopen(
-            f"{AIConfig.OLLAMA_URL}/api/tags", timeout=2
-        ) as r:
-            return r.status == 200
-    except Exception:
-        return False
-
-def _tools_status():
-    return {
-        "ffmpeg": _ffmpeg_available(),
-        "pandoc": _pandoc_available(),
-    }
-
 def _get_download_dir() -> Path:
     try:
         con = sqlite3.connect(str(DB_PATH))
@@ -252,7 +333,7 @@ def _get_download_dir() -> Path:
         pass
     return DL_DIR
 
-def _enqueue_job(url: str) -> str:
+def _enqueue_job(url: str, meta: dict | None = None) -> str:
     job_id = uuid4().hex
     download_jobs[job_id] = {
         "job_id":   job_id,
@@ -266,7 +347,8 @@ def _enqueue_job(url: str) -> str:
         "error":    "",
         "method":   "direct",
     }
-    _dl_queue.put((job_id, {"url": url}))
+    _enqueue_job_db(job_id, url)
+    _dl_queue.put((job_id, {"url": url, "meta": meta or {}}))
     return job_id
 
 
@@ -370,10 +452,18 @@ def _generate_pwa_icons():
 def startup_event():
     _init_db()
     _generate_pwa_icons()
+    _load_jobs_from_db()
     for _ in range(_MAX_CONCURRENT):
         threading.Thread(target=_worker, daemon=True).start()
 
-    ollama_ok = _check_ollama()
+    # Sync Ollama check for startup banner
+    ollama_ok = False
+    try:
+        with urllib.request.urlopen(f"{AIConfig.OLLAMA_URL}/api/tags", timeout=2) as r:
+            ollama_ok = r.status == 200
+    except Exception:
+        pass
+
     print("\n=== Scholara Status ===")
     print(f"  {'[OK]' if ollama_ok else '[--]'} Ollama ({AIConfig.OLLAMA_MODEL})")
     print(f"  {'[OK]' if AIConfig.DEEPSEEK_API_KEY else '[--]'} DeepSeek API")
@@ -390,19 +480,33 @@ def index():
     return FileResponse(str(STATIC_DIR / "index.html"))
 
 @app.get("/api/status")
-def status():
+async def status():
     dl_dir = _get_download_dir()
     files  = []
     for f in sorted(dl_dir.iterdir()):
         if f.is_file():
             files.append({"name": f.name, "size": f.stat().st_size,
                           "ext": f.suffix.lower().lstrip(".")})
-    ollama_ok = _check_ollama()
+
+    ollama_available = False
+    ollama_model     = AIConfig.OLLAMA_MODEL
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"{AIConfig.OLLAMA_URL}/api/tags")
+            if resp.status_code == 200:
+                ollama_available = True
+                models = resp.json().get("models", [])
+                if models:
+                    ollama_model = models[0].get("name", AIConfig.OLLAMA_MODEL)
+    except Exception:
+        pass
+
     return {
-        "tools":               _tools_status(),
+        "tools":               {"ffmpeg": _ffmpeg_available(), "pandoc": _pandoc_available()},
         "files":               files,
-        "ollama_available":    ollama_ok,
-        "ollama_model":        AIConfig.OLLAMA_MODEL,
+        "ollama_available":    ollama_available,
+        "ollama_model":        ollama_model,
+        "ollama_url":          AIConfig.OLLAMA_URL,
         "deepseek_configured": bool(AIConfig.DEEPSEEK_API_KEY),
         "ai_backend":          AIConfig.BACKEND,
     }
@@ -417,7 +521,14 @@ def download_url(req: DownloadRequest, request: Request):
     lang = _get_lang(request)
     if not _is_allowed_url(url):
         raise HTTPException(403, _msg("download_not_allowed", lang))
-    job_id = _enqueue_job(url)
+    meta = {
+        "title":    req.title,
+        "authors":  req.authors,
+        "year":     req.year,
+        "journal":  req.journal,
+        "language": req.language,
+    }
+    job_id = _enqueue_job(url, meta=meta)
     return {"job_id": job_id, "status": "queued"}
 
 @app.get("/api/progress/{job_id}")
@@ -452,6 +563,7 @@ def cancel_job(job_id: str):
     if job["status"] != "queued":
         raise HTTPException(400, "Can only cancel queued jobs")
     job["status"] = "cancelled"
+    _update_job_db(job_id, status="cancelled")
     return {"status": "cancelled"}
 
 
@@ -471,7 +583,9 @@ def _search_arxiv(query, limit=5):
             link   = re.search(r'<id>(.*?)</id>', e)
             summ   = re.search(r'<summary>(.*?)</summary>', e, re.DOTALL)
             auth   = re.findall(r'<name>(.*?)</name>', e)
+            pub    = re.search(r'<published>(.*?)</published>', e)
             pdf_id = link.group(1).split("/abs/")[-1] if link else ""
+            year   = int(pub.group(1)[:4]) if pub else None
             results.append({
                 "source":  "arXiv", "icon": "📄",
                 "title":   (title.group(1).strip() if title else "—"),
@@ -480,6 +594,7 @@ def _search_arxiv(query, limit=5):
                 "pdf_url": f"https://arxiv.org/pdf/{pdf_id}.pdf" if pdf_id else "",
                 "snippet": (summ.group(1).strip()[:200] if summ else ""),
                 "open_access": True,
+                "year": year, "language": "en",
             })
         return results
     except Exception as ex:
@@ -496,14 +611,16 @@ def _search_gutenberg(query, limit=5):
             fmts = b.get("formats", {})
             pdf  = fmts.get("application/pdf", "")
             txt  = fmts.get("text/plain; charset=utf-8", fmts.get("text/plain", ""))
+            langs = b.get("languages", [])
             results.append({
                 "source":  "Gutenberg", "icon": "📚",
                 "title":   b.get("title", "—"),
                 "authors": ", ".join(a["name"] for a in b.get("authors", [])),
                 "url":     f"https://www.gutenberg.org/ebooks/{b['id']}",
                 "pdf_url": pdf or txt,
-                "snippet": f"Language: {', '.join(b.get('languages',[]))} | Subjects: {', '.join(b.get('subjects',[])[:3])}",
+                "snippet": f"Language: {', '.join(langs)} | Subjects: {', '.join(b.get('subjects',[])[:3])}",
                 "open_access": True,
+                "language": langs[0] if langs else None,
             })
         return results
     except Exception as ex:
@@ -519,6 +636,7 @@ def _search_doaj(query, limit=5):
         for art in data.get("results", [])[:limit]:
             bib  = art.get("bibjson", {})
             link = next((l["url"] for l in bib.get("link", []) if l.get("type") == "fulltext"), "")
+            year = bib.get("year")
             results.append({
                 "source":  "DOAJ", "icon": "🔓",
                 "title":   bib.get("title", "—"),
@@ -527,6 +645,8 @@ def _search_doaj(query, limit=5):
                 "pdf_url": link,
                 "snippet": bib.get("abstract", "")[:200],
                 "open_access": True,
+                "year": int(year) if year else None,
+                "journal": bib.get("journal", {}).get("title", ""),
             })
         return results
     except Exception as ex:
@@ -552,6 +672,7 @@ def _search_openalex(query, limit=5):
                 "pdf_url": pdf,
                 "snippet": f"Cited by {w.get('cited_by_count',0)} | {w.get('publication_year','')}",
                 "open_access": True,
+                "year": w.get("publication_year"),
             })
         return results
     except Exception as ex:
@@ -582,15 +703,155 @@ def _search_archive(query, limit=5):
     except Exception as ex:
         return [{"source":"Archive.org","icon":"📚","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
+def _search_hal(query, limit=5):
+    q   = urllib.parse.quote(query)
+    fl  = "title_s,abstract_s,author_s,halId_s,uri_s,publicationDate_tdate,journalTitle_s"
+    url = (f"https://api.archives-ouvertes.fr/search/"
+           f"?q={q}&fl={fl}&rows={limit}&wt=json")
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read())
+        results = []
+        for doc in data.get("response", {}).get("docs", []):
+            hal_id  = (doc.get("halId_s") or [""])[0] if isinstance(doc.get("halId_s"), list) else doc.get("halId_s", "")
+            uri_val = doc.get("uri_s", "")
+            uri     = uri_val[0] if isinstance(uri_val, list) else uri_val
+            pdf_url = uri if uri.endswith(".pdf") else f"https://hal.science/{hal_id}/document" if hal_id else ""
+            title_v = doc.get("title_s", ["—"])
+            title   = title_v[0] if isinstance(title_v, list) else title_v
+            abst_v  = doc.get("abstract_s", [""])
+            snippet = (abst_v[0] if isinstance(abst_v, list) else abst_v)[:300]
+            authors = doc.get("author_s", [])
+            pub     = doc.get("publicationDate_tdate", "")
+            year    = int(pub[:4]) if pub and len(pub) >= 4 else None
+            journal_v = doc.get("journalTitle_s", "")
+            journal   = journal_v[0] if isinstance(journal_v, list) else journal_v
+            results.append({
+                "source":  "HAL", "icon": "🏛️",
+                "title":   title,
+                "authors": ", ".join(authors[:3]) if isinstance(authors, list) else authors,
+                "url":     uri or f"https://hal.science/{hal_id}",
+                "pdf_url": pdf_url,
+                "snippet": snippet,
+                "open_access": True,
+                "year": year, "journal": journal, "language": "fr",
+            })
+        return results
+    except Exception as ex:
+        return [{"source":"HAL","icon":"🏛️","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
+
+def _search_persee(query, limit=5):
+    q   = urllib.parse.quote(query)
+    url = f"https://www.persee.fr/search/list?q={q}&rows={limit}&format=json"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read())
+        results = []
+        for item in (data.get("items") or data.get("results") or [])[:limit]:
+            results.append({
+                "source":  "Persée", "icon": "📰",
+                "title":   item.get("title", "—"),
+                "authors": item.get("author", ""),
+                "url":     item.get("link", ""),
+                "pdf_url": item.get("pdfLink", ""),
+                "snippet": (item.get("abstract", "") or "")[:300],
+                "open_access": True,
+                "language": "fr",
+            })
+        if not results:
+            raise ValueError("empty")
+        return results
+    except Exception:
+        # Fallback: HTML scraping with BeautifulSoup
+        try:
+            from bs4 import BeautifulSoup
+            q2  = urllib.parse.quote(query)
+            url2 = f"https://www.persee.fr/search?q={q2}"
+            req2 = urllib.request.Request(url2, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req2, timeout=10) as r:
+                html = r.read().decode("utf-8", errors="replace")
+            soup    = BeautifulSoup(html, "html.parser")
+            results = []
+            for card in soup.select(".result-item, .search-result, article")[:limit]:
+                t_el = card.find(["h2", "h3", "a"])
+                link_el = card.find("a", href=True)
+                snip_el = card.find("p")
+                title = t_el.get_text(strip=True) if t_el else "—"
+                link  = link_el["href"] if link_el else ""
+                if link and not link.startswith("http"):
+                    link = "https://www.persee.fr" + link
+                results.append({
+                    "source": "Persée", "icon": "📰",
+                    "title": title, "authors": "", "url": link, "pdf_url": "",
+                    "snippet": snip_el.get_text(strip=True)[:300] if snip_el else "",
+                    "open_access": True, "language": "fr",
+                })
+            return results or [{"source":"Persée","icon":"📰","title":"No results","url":"","pdf_url":"","snippet":"","authors":""}]
+        except Exception as ex2:
+            return [{"source":"Persée","icon":"📰","title":f"Error: {ex2}","url":"","pdf_url":"","snippet":"","authors":""}]
+
+def _search_openedition(query, limit=5):
+    q   = urllib.parse.quote(query)
+    url = f"https://api.openedition.org/?q={q}&format=json&rows={limit}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read())
+        results = []
+        docs = data.get("docs") or data.get("items") or data.get("results") or []
+        for doc in docs[:limit]:
+            results.append({
+                "source":  "OpenEdition", "icon": "📖",
+                "title":   doc.get("title", "—"),
+                "authors": doc.get("creator", doc.get("author", "")),
+                "url":     doc.get("identifier", doc.get("url", "")),
+                "pdf_url": "",
+                "snippet": (doc.get("description", "") or "")[:300],
+                "open_access": True,
+                "journal": doc.get("source", ""),
+                "language": "fr",
+            })
+        return results or [{"source":"OpenEdition","icon":"📖","title":"No results","url":"","pdf_url":"","snippet":"","authors":""}]
+    except Exception as ex:
+        return [{"source":"OpenEdition","icon":"📖","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
+
+def _search_erudit(query, limit=5):
+    q   = urllib.parse.quote(query)
+    url = f"https://apropos.erudit.org/api/items?q={q}&limit={limit}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read())
+        results = []
+        items = data if isinstance(data, list) else data.get("items", data.get("results", []))
+        for item in items[:limit]:
+            author = item.get("author", "")
+            results.append({
+                "source":  "Érudit", "icon": "📚",
+                "title":   item.get("title", "—"),
+                "authors": author if isinstance(author, str) else ", ".join(author[:3]),
+                "url":     item.get("url", ""),
+                "pdf_url": item.get("pdf_url", ""),
+                "snippet": (item.get("abstract", "") or "")[:300],
+                "open_access": True,
+                "language": "fr",
+            })
+        return results or [{"source":"Érudit","icon":"📚","title":"No results","url":"","pdf_url":"","snippet":"","authors":""}]
+    except Exception as ex:
+        return [{"source":"Érudit","icon":"📚","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
+
+
 @app.post("/api/search")
 def search(req: SearchRequest):
     results = []
     src_map = {
-        "arxiv":     _search_arxiv,
-        "gutenberg": _search_gutenberg,
-        "doaj":      _search_doaj,
-        "openalex":  _search_openalex,
-        "archive":   _search_archive,
+        "arxiv":       _search_arxiv,
+        "gutenberg":   _search_gutenberg,
+        "doaj":        _search_doaj,
+        "openalex":    _search_openalex,
+        "archive":     _search_archive,
+        "hal":         _search_hal,
+        "persee":      _search_persee,
+        "openedition": _search_openedition,
+        "erudit":      _search_erudit,
     }
     per = req.limit // max(len(req.sources), 1) + 2
     for src in req.sources:
@@ -640,7 +901,7 @@ async def nl_search(request: Request):
     }
 
 
-def _search_source(source: str, query: str) -> list:
+def _search_source(source: str, query: str, limit: int = 5) -> list:
     src_map = {
         "arxiv":            _search_arxiv,
         "gutenberg":        _search_gutenberg,
@@ -648,9 +909,72 @@ def _search_source(source: str, query: str) -> list:
         "openalex":         _search_openalex,
         "internet_archive": _search_archive,
         "archive":          _search_archive,
+        "hal":              _search_hal,
+        "persee":           _search_persee,
+        "openedition":      _search_openedition,
+        "erudit":           _search_erudit,
     }
     fn = src_map.get(source)
-    return fn(query) if fn else []
+    return fn(query, limit) if fn else []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Routes – Citation Export
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/api/cite/{history_id}")
+def cite_document(history_id: int, format: str = "bibtex"):
+    con = _db()
+    row = con.execute(
+        "SELECT title, url, authors, year, journal, source FROM history WHERE id = ?",
+        (history_id,)
+    ).fetchone()
+    con.close()
+
+    if not row:
+        raise HTTPException(404, "Document not found")
+
+    title    = row["title"] or "Untitled"
+    url      = row["url"] or ""
+    authors  = json.loads(row["authors"]) if row["authors"] else []
+    year     = row["year"]
+    journal  = row["journal"] or row["source"] or ""
+    year_str = str(year) if year else "n.d."
+
+    if format == "bibtex":
+        content = (
+            f"@article{{scholara:{history_id},\n"
+            f"  title   = {{{title}}},\n"
+            f"  author  = {{{' and '.join(authors) if authors else 'Unknown'}}},\n"
+            f"  year    = {{{year_str}}},\n"
+            f"  journal = {{{journal}}},\n"
+            f"  url     = {{{url}}}\n"
+            f"}}"
+        )
+        return Response(content=content, media_type="text/plain",
+                        headers={"Content-Disposition": f"attachment; filename=scholara_{history_id}.bib"})
+
+    elif format == "ris":
+        lines = ["TY  - JOUR", f"TI  - {title}"]
+        for a in authors:
+            lines.append(f"AU  - {a}")
+        if year:
+            lines.append(f"PY  - {year}")
+        if journal:
+            lines.append(f"JF  - {journal}")
+        if url:
+            lines.append(f"UR  - {url}")
+        lines.append("ER  -")
+        content = "\n".join(lines)
+        return Response(content=content, media_type="application/x-research-info-systems",
+                        headers={"Content-Disposition": f"attachment; filename=scholara_{history_id}.ris"})
+
+    elif format == "apa":
+        author_str = ", ".join(authors) if authors else "Unknown"
+        content = f"{author_str} ({year_str}). {title}. {journal}. {url}"
+        return Response(content=content, media_type="text/plain")
+
+    else:
+        raise HTTPException(400, f"Unknown format '{format}'. Use bibtex, ris, or apa.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
