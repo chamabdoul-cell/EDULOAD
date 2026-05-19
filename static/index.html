@@ -1029,7 +1029,23 @@ textarea { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
-<script>
+<!-- ══ FILE ITEM TEMPLATE ══════════════════════════════════════════ -->
+<template id="tpl-file-item">
+  <div class="dl-item">
+    <span class="dl-icon"></span>
+    <span class="dl-name"></span>
+    <span class="dl-size"></span>
+    <div class="dl-actions">
+      <button class="icon-btn" data-action="view" title="View/Play">👁</button>
+      <a data-action="save"><button class="icon-btn" title="Save">💾</button></a>
+      <button class="icon-btn del" data-action="delete-file" title="Delete">🗑</button>
+    </div>
+  </div>
+</template>
+
+<script type="module" src="/static/js/app.js"></script>
+
+<!-- DEAD SCRIPT REMOVED — kept as comment to mark split point
 // ── i18n ─────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   en: {
@@ -1973,10 +1989,8 @@ setInterval(loadStatus, 15000);
 setInterval(renderQueuePanel, 2000);
 
 // ── PWA service worker ────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
-}
-</script>
+// (moved to app.js)
+-->
 
 <!-- ══ LOGIN MODAL ═══════════════════════════════════════════════ -->
 <div class="login-modal-bg" id="loginModalBg">

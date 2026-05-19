@@ -1,5 +1,10 @@
-const CACHE = 'scholara-v1';
-const SHELL = ['/', '/static/index.html', '/static/manifest.json'];
+const CACHE = 'scholara-v2';
+const SHELL = [
+  '/', '/static/index.html', '/static/manifest.json',
+  '/static/js/app.js', '/static/js/i18n.js', '/static/js/auth.js',
+  '/static/js/api.js', '/static/js/download.js', '/static/js/search.js',
+  '/static/js/collections.js',
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(
