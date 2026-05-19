@@ -1,4 +1,20 @@
 <example>
+User: "cherche des articles sur la didactique des mathématiques"
+Output:
+{
+  "sources": ["hal", "persee", "openedition", "erudit"],
+  "queries": {
+    "hal": "didactique des mathématiques enseignement",
+    "persee": "didactique mathématiques",
+    "openedition": "didactique mathématiques",
+    "erudit": "didactique mathématiques"
+  },
+  "content_type": "research",
+  "confidence": "high"
+}
+</example>
+
+<example>
 Input: "Find me videos about quantum computing for beginners"
 Output:
 {

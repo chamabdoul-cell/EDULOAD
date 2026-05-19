@@ -58,3 +58,22 @@ class TestDirectDownloader:
             result = dl.download("https://arxiv.org/pdf/test.pdf", dl.output_dir)
         assert result["success"]
         assert dl.counts["direct"] == 1
+
+
+class TestYtdlpGate:
+
+    def test_gate_requires_north_and_disclaimer(self):
+        """Gate returns False for global-south regardless of disclaimer."""
+        from core.downloader import _ytdlp_allowed
+        from config.settings import AIConfig
+        with patch.object(AIConfig, "is_north", return_value=False):
+            assert _ytdlp_allowed(True) is False
+            assert _ytdlp_allowed(False) is False
+
+    def test_gate_requires_disclaimer_in_north(self):
+        """Gate returns False even in Global North when disclaimer not accepted."""
+        from core.downloader import _ytdlp_allowed
+        from config.settings import AIConfig
+        with patch.object(AIConfig, "is_north", return_value=True):
+            assert _ytdlp_allowed(False) is False
+            assert _ytdlp_allowed(True) is True

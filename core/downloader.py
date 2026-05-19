@@ -7,6 +7,13 @@ from urllib.parse import urlparse
 
 import requests
 
+from config.settings import ClaudeConfig
+
+
+def _ytdlp_allowed(user_accepted_disclaimer: bool = False) -> bool:
+    """yt-dlp is only active in Global North mode AND after the user accepts the disclaimer."""
+    return ClaudeConfig.is_north() and user_accepted_disclaimer
+
 
 class PerformanceMonitor:
     """Rolling 60-minute window of download timing."""
@@ -50,9 +57,40 @@ class DirectDownloader:
         self.counts = {"direct": 0, "failed": 0}
         self.monitor = PerformanceMonitor()
 
-    def download(self, url: str, output_dir: Path = None) -> dict:
+    def download(
+        self,
+        url: str,
+        output_dir: Path = None,
+        user_accepted_disclaimer: bool = False,
+    ) -> dict:
+        import re
+        import shutil
+        import subprocess
+
         out = output_dir or self.output_dir
         t = time.time()
+
+        if _ytdlp_allowed(user_accepted_disclaimer):
+            ytdlp_bin = shutil.which("yt-dlp")
+            if not ytdlp_bin:
+                raise RuntimeError("yt-dlp is not installed — run: pip install yt-dlp")
+            out_template = str(out / "%(title)s.%(ext)s")
+            proc = subprocess.run(
+                [ytdlp_bin, "--no-playlist", "-o", out_template, url],
+                capture_output=True, text=True, timeout=300,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(f"yt-dlp error: {proc.stderr[:400]}")
+            m = re.search(r'\[download\] Destination: (.+)', proc.stdout)
+            if not m:
+                m = re.search(r'\[download\] (.+) has already been downloaded', proc.stdout)
+            filename = Path(m.group(1)).name if m else "download"
+            filepath = out / filename
+            size_kb = filepath.stat().st_size // 1024 if filepath.exists() else 0
+            self.counts["direct"] += 1
+            self.monitor.record("ytdlp", time.time() - t, True)
+            return {"success": True, "file": filename, "size_kb": size_kb, "method": "yt-dlp"}
+
         result = self._download_direct(url, out)
         elapsed = time.time() - t
         if result["success"]:

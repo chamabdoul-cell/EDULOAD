@@ -7,6 +7,7 @@ from uuid import uuid4
 from pathlib import Path
 from queue import Queue
 import urllib.request, urllib.parse, urllib.error
+import requests
 
 from fastapi import FastAPI, HTTPException, Body, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +19,9 @@ import httpx
 from core.ai_router import AISearchRouter
 from core.fallback import fallback_routing
 from config.settings import AIConfig
+from db import get_db
+from routers.auth import router as auth_router
+from routers.admin import router as admin_router
 
 # ── Bilingual helpers ─────────────────────────────────────────────
 
@@ -53,28 +57,55 @@ ALLOWED_DOWNLOAD_DOMAINS = [
     "gutenberg.org", "archive.org", "plos.org", "ncbi.nlm.nih.gov",
     "biorxiv.org", "medrxiv.org", "hal.science", "persee.fr",
     "openedition.org", "erudit.org", "africarxiv.org", "ajol.info",
+    # Common OA repositories surfaced by OpenAlex and others
+    "europepmc.org", "zenodo.org", "figshare.com", "osf.io",
+    "frontiersin.org", "mdpi.com", "peerj.com", "hindawi.com",
+    "intechopen.com", "f1000research.com",
 ]
+
+GLOBAL_NORTH_DOMAINS = {
+    "semanticscholar.org",
+    "api.semanticscholar.org",
+    "pubmed.ncbi.nlm.nih.gov",
+    "eutils.ncbi.nlm.nih.gov",
+    "api.crossref.org",
+    "core.ac.uk",
+    "api.base-search.net",
+    "unpaywall.org",
+    "api.unpaywall.org",
+}
+
+
+def _active_domains() -> set:
+    domains = set(ALLOWED_DOWNLOAD_DOMAINS)
+    if AIConfig.is_north():
+        domains |= GLOBAL_NORTH_DOMAINS
+    return domains
 
 app = FastAPI(title="Scholara")
 app.mount("/static",    StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/downloads", StaticFiles(directory=str(DL_DIR)),     name="downloads")
+app.include_router(auth_router)
+app.include_router(admin_router)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Models
 # ══════════════════════════════════════════════════════════════════════════════
 class DownloadRequest(BaseModel):
-    url:      str
-    title:    str = ""
-    authors:  list[str] = []
-    year:     int | None = None
-    journal:  str = ""
-    language: str = ""
+    url:                  str
+    title:                str = ""
+    authors:              list[str] = []
+    year:                 int | None = None
+    journal:              str = ""
+    language:             str = ""
+    disclaimer_accepted:  bool = False
 
 class SearchRequest(BaseModel):
     query:   str
     sources: list[str] = ["arxiv", "gutenberg", "doaj", "openalex", "archive"]
-    limit:   int = 10
+    limit:   int = 50
+    lang:    str = ""   # "fr", "en", or "" → auto-detect
 
 class ConvertRequest(BaseModel):
     filename: str
@@ -96,9 +127,7 @@ class TagRequest(BaseModel):
 # Database
 # ══════════════════════════════════════════════════════════════════════════════
 def _db():
-    con = sqlite3.connect(str(DB_PATH))
-    con.row_factory = sqlite3.Row
-    return con
+    return get_db()
 
 def _init_db():
     con = _db()
@@ -137,6 +166,36 @@ def _init_db():
         result_filename TEXT,
         created_at      TEXT DEFAULT (datetime('now')),
         updated_at      TEXT DEFAULT (datetime('now'))
+    )""")
+
+    # ── Phase A.2 — Multi-user tables (non-destructive, IF NOT EXISTS) ─────────
+    con.execute("""CREATE TABLE IF NOT EXISTS institutions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        country    TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS users (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        email          TEXT UNIQUE NOT NULL,
+        password_hash  TEXT NOT NULL,
+        role           TEXT NOT NULL DEFAULT 'researcher',
+        institution_id INTEGER REFERENCES institutions(id),
+        created_at     TEXT DEFAULT (datetime('now'))
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS usage (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER REFERENCES users(id),
+        endpoint    TEXT,
+        tokens_used INTEGER DEFAULT 0,
+        created_at  TEXT DEFAULT (datetime('now'))
+    )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS audit_logs (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER REFERENCES users(id),
+        action     TEXT,
+        target     TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
     )""")
     con.commit()
 
@@ -237,7 +296,7 @@ def _is_allowed_url(url: str) -> bool:
         host = parsed.netloc.lower()
         if host.startswith("www."):
             host = host[4:]
-        return any(host == d or host.endswith("." + d) for d in ALLOWED_DOWNLOAD_DOMAINS)
+        return any(host == d or host.endswith("." + d) for d in _active_domains())
     except Exception:
         return False
 
@@ -308,6 +367,29 @@ def _worker():
 # ══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ══════════════════════════════════════════════════════════════════════════════
+def _first(v):
+    """Return the first element if v is a list, else v itself, always as str."""
+    if isinstance(v, list):
+        v = v[0] if v else ""
+    return v if isinstance(v, str) else str(v) if v is not None else ""
+
+_FR_STOPWORDS = {
+    "le","la","les","de","du","des","un","une","et","en","au","aux","sur",
+    "avec","pour","par","que","qui","dans","est","sont","il","elle","nous",
+    "vous","ils","elles","ce","se","ne","pas","plus","où","à","ou","ni",
+    "si","car","mais","donc","or","méthode","méthodes","analyse","résultats",
+    "étude","approche","modèle","modèles","théorie","application","éléments",
+    "finis","calcul","numérique","équation","équations","solution","problème",
+}
+
+def _detect_lang(text: str) -> str:
+    words = set(text.lower().split())
+    return "fr" if len(words & _FR_STOPWORDS) >= 2 else "en"
+
+# French-first academic sources; others are English-dominant
+_FR_SOURCES  = {"hal", "persee", "openedition", "erudit"}
+_EN_SOURCES  = {"arxiv", "gutenberg", "archive"}
+
 def _run(cmd, **kwargs):
     return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
@@ -322,7 +404,7 @@ def _pandoc_available():
 
 def _get_download_dir() -> Path:
     try:
-        con = sqlite3.connect(str(DB_PATH))
+        con = get_db()
         row = con.execute("SELECT value FROM settings WHERE key='download_dir'").fetchone()
         con.close()
         if row and row[0] and row[0].strip():
@@ -469,6 +551,7 @@ def startup_event():
     print(f"  {'[OK]' if AIConfig.DEEPSEEK_API_KEY else '[--]'} DeepSeek API")
     print(f"  {'[OK]' if _ffmpeg_available() else '[--]'} ffmpeg (conversion)")
     print("  [OK] Direct HTTP: always available")
+    print(f"  [OK] Mode: {AIConfig.APP_MODE}  |  Segment: {AIConfig.MARKET_SEGMENT.value}")
     print("======================\n")
 
 
@@ -509,6 +592,15 @@ async def status():
         "ollama_url":          AIConfig.OLLAMA_URL,
         "deepseek_configured": bool(AIConfig.DEEPSEEK_API_KEY),
         "ai_backend":          AIConfig.BACKEND,
+        "market_segment":      AIConfig.MARKET_SEGMENT.value,
+        "app_mode":            AIConfig.APP_MODE,
+        "active_sources":      (
+            ["arxiv", "gutenberg", "doaj", "openalex", "internet_archive",
+             "hal", "persee", "openedition", "erudit"]
+            + (["semantic_scholar", "pubmed", "crossref", "core", "base"]
+               if AIConfig.is_north() else [])
+        ),
+        "ytdlp_available":     AIConfig.is_north(),
     }
 
 
@@ -570,12 +662,23 @@ def cancel_job(job_id: str):
 # ══════════════════════════════════════════════════════════════════════════════
 # Routes – Search
 # ══════════════════════════════════════════════════════════════════════════════
-def _search_arxiv(query, limit=5):
+def _search_arxiv(query, limit=10):
     q   = urllib.parse.quote(query)
     url = f"https://export.arxiv.org/api/query?search_query=all:{q}&max_results={limit}"
+    headers = {"User-Agent": "Scholara/1.0 (open-access research platform; mailto:scholara@open.edu)"}
     try:
-        with urllib.request.urlopen(url, timeout=10) as r:
-            xml = r.read().decode()
+        for attempt in range(2):
+            r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code == 429:
+                time.sleep(3)
+                continue
+            r.raise_for_status()
+            xml = r.text
+            break
+        else:
+            return [{"source":"arXiv","icon":"📄",
+                     "title":"arXiv rate-limited — wait a moment and retry",
+                     "url":"","pdf_url":"","snippet":"","authors":""}]
         entries = re.findall(r'<entry>(.*?)</entry>', xml, re.DOTALL)
         results = []
         for e in entries:
@@ -584,14 +687,16 @@ def _search_arxiv(query, limit=5):
             summ   = re.search(r'<summary>(.*?)</summary>', e, re.DOTALL)
             auth   = re.findall(r'<name>(.*?)</name>', e)
             pub    = re.search(r'<published>(.*?)</published>', e)
-            pdf_id = link.group(1).split("/abs/")[-1] if link else ""
+            abs_id = link.group(1).strip().split("/abs/")[-1] if link else ""
             year   = int(pub.group(1)[:4]) if pub else None
+            abs_url = link.group(1).strip() if link else ""
+            pdf_url = f"https://arxiv.org/pdf/{abs_id}.pdf" if abs_id else ""
             results.append({
                 "source":  "arXiv", "icon": "📄",
                 "title":   (title.group(1).strip() if title else "—"),
                 "authors": ", ".join(auth[:3]),
-                "url":     link.group(1).strip() if link else "",
-                "pdf_url": f"https://arxiv.org/pdf/{pdf_id}.pdf" if pdf_id else "",
+                "url":     abs_url,
+                "pdf_url": pdf_url,
                 "snippet": (summ.group(1).strip()[:200] if summ else ""),
                 "open_access": True,
                 "year": year, "language": "en",
@@ -626,9 +731,10 @@ def _search_gutenberg(query, limit=5):
     except Exception as ex:
         return [{"source":"Gutenberg","icon":"📚","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
-def _search_doaj(query, limit=5):
+def _search_doaj(query, limit=5, lang=""):
     q   = urllib.parse.quote(query)
-    url = f"https://doaj.org/api/search/articles/{q}?pageSize={limit}"
+    lang_filter = f"+AND+bibjson.journal.language%3A{lang.upper()}" if lang else ""
+    url = f"https://doaj.org/api/search/articles/{q}{lang_filter}?pageSize={limit}"
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
             data = json.loads(r.read())
@@ -652,27 +758,36 @@ def _search_doaj(query, limit=5):
     except Exception as ex:
         return [{"source":"DOAJ","icon":"🔓","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
-def _search_openalex(query, limit=5):
+def _search_openalex(query, limit=10, lang=""):
     q   = urllib.parse.quote(query)
+    lang_filter = f",language:{lang}" if lang else ""
     url = (f"https://api.openalex.org/works?search={q}"
-           f"&filter=is_oa:true&per-page={limit}&mailto=scholara@open.edu")
+           f"&filter=is_oa:true{lang_filter}&per-page={limit}&mailto=scholara@open.edu")
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
             data = json.loads(r.read())
         results = []
         for w in data.get("results", []):
             pdf = w.get("open_access", {}).get("oa_url", "") or ""
-            doi = w.get("doi", "")
+            doi = w.get("doi", "") or ""
+            openalex_id = w.get("id", "") or ""
+            # Prefer OA PDF, then DOI, then OpenAlex page as fallback
+            open_url = pdf or doi or openalex_id
+            host_venue = (w.get("primary_location") or {}).get("source") or {}
+            journal = host_venue.get("display_name", "") or ""
             results.append({
                 "source":  "OpenAlex", "icon": "🔬",
-                "title":   w.get("title", "—"),
+                "title":   w.get("title") or "—",
                 "authors": ", ".join(a["author"]["display_name"]
-                                     for a in w.get("authorships", [])[:3]),
-                "url":     doi or pdf,
+                                     for a in w.get("authorships", [])[:3]
+                                     if a.get("author")),
+                "url":     open_url,
                 "pdf_url": pdf,
-                "snippet": f"Cited by {w.get('cited_by_count',0)} | {w.get('publication_year','')}",
+                "snippet": (w.get("abstract") or
+                            f"Cited by {w.get('cited_by_count',0)}"),
                 "open_access": True,
                 "year": w.get("publication_year"),
+                "journal": journal,
             })
         return results
     except Exception as ex:
@@ -790,58 +905,271 @@ def _search_persee(query, limit=5):
         except Exception as ex2:
             return [{"source":"Persée","icon":"📰","title":f"Error: {ex2}","url":"","pdf_url":"","snippet":"","authors":""}]
 
-def _search_openedition(query, limit=5):
+def _search_openedition(query, limit=10):
     q   = urllib.parse.quote(query)
-    url = f"https://api.openedition.org/?q={q}&format=json&rows={limit}"
+    url = f"https://api.openedition.org/1.0/?q={q}&format=json&rows={limit}"
     try:
-        with urllib.request.urlopen(url, timeout=10) as r:
+        req = urllib.request.Request(url, headers={"User-Agent": "Scholara/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read())
         results = []
-        docs = data.get("docs") or data.get("items") or data.get("results") or []
+        docs = (data.get("response", {}).get("docs")
+                or data.get("docs")
+                or data.get("items")
+                or data.get("results") or [])
         for doc in docs[:limit]:
+            doc_url = (doc.get("identifier") or doc.get("url") or
+                       doc.get("dc_identifier") or "")
+            if isinstance(doc_url, list):
+                doc_url = doc_url[0] if doc_url else ""
+            title = doc.get("title") or doc.get("dc_title") or "—"
+            if isinstance(title, list):
+                title = title[0] if title else "—"
+            author = doc.get("creator") or doc.get("author") or doc.get("dc_creator") or ""
+            if isinstance(author, list):
+                author = ", ".join(author[:3])
             results.append({
                 "source":  "OpenEdition", "icon": "📖",
-                "title":   doc.get("title", "—"),
-                "authors": doc.get("creator", doc.get("author", "")),
-                "url":     doc.get("identifier", doc.get("url", "")),
-                "pdf_url": "",
-                "snippet": (doc.get("description", "") or "")[:300],
+                "title":   title,
+                "authors": author,
+                "url":     doc_url,
+                "pdf_url": _first(doc.get("pdf_url") or doc.get("fulltext") or ""),
+                "snippet": _first((doc.get("description") or doc.get("dc_description") or ""))[:300],
                 "open_access": True,
-                "journal": doc.get("source", ""),
+                "journal": _first(doc.get("source") or doc.get("dc_source") or ""),
                 "language": "fr",
             })
-        return results or [{"source":"OpenEdition","icon":"📖","title":"No results","url":"","pdf_url":"","snippet":"","authors":""}]
+        return results or []
     except Exception as ex:
         return [{"source":"OpenEdition","icon":"📖","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
-def _search_erudit(query, limit=5):
-    q   = urllib.parse.quote(query)
-    url = f"https://apropos.erudit.org/api/items?q={q}&limit={limit}"
+def _search_erudit(query, limit=10):
+    q = urllib.parse.quote(query)
+    # Primary: Érudit REST API
     try:
-        with urllib.request.urlopen(url, timeout=10) as r:
-            data = json.loads(r.read())
+        url = f"https://www.erudit.org/api/v1/search/?q={q}&nb_result_par_page={limit}"
+        r   = requests.get(url, headers={"User-Agent": "Scholara/1.0"}, timeout=10)
+        r.raise_for_status()
+        data  = r.json()
+        items = data if isinstance(data, list) else data.get("results", data.get("items", []))
         results = []
-        items = data if isinstance(data, list) else data.get("items", data.get("results", []))
         for item in items[:limit]:
-            author = item.get("author", "")
+            author = item.get("author", item.get("authors", ""))
+            if isinstance(author, list):
+                author = ", ".join(
+                    (a if isinstance(a, str) else a.get("name", "")) for a in author[:3]
+                )
             results.append({
                 "source":  "Érudit", "icon": "📚",
                 "title":   item.get("title", "—"),
-                "authors": author if isinstance(author, str) else ", ".join(author[:3]),
-                "url":     item.get("url", ""),
+                "authors": author,
+                "url":     item.get("url", item.get("link", "")),
                 "pdf_url": item.get("pdf_url", ""),
-                "snippet": (item.get("abstract", "") or "")[:300],
+                "snippet": (item.get("abstract", item.get("resume", "")) or "")[:300],
                 "open_access": True,
                 "language": "fr",
             })
-        return results or [{"source":"Érudit","icon":"📚","title":"No results","url":"","pdf_url":"","snippet":"","authors":""}]
+        if results:
+            return results
+    except Exception:
+        pass
+    # Fallback: scrape the Érudit search page
+    try:
+        from bs4 import BeautifulSoup
+        url2 = f"https://www.erudit.org/en/search/?q={q}"
+        req2 = urllib.request.Request(url2, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req2, timeout=12) as r:
+            html = r.read().decode("utf-8", errors="replace")
+        soup    = BeautifulSoup(html, "html.parser")
+        results = []
+        for card in soup.select("article.media, .result-document, .search-result, li.result")[:limit]:
+            t_el    = card.find(["h3", "h2", "h4"])
+            link_el = card.find("a", href=True)
+            snip_el = card.find("p")
+            title   = t_el.get_text(strip=True) if t_el else "—"
+            link    = link_el["href"] if link_el else ""
+            if link and not link.startswith("http"):
+                link = "https://www.erudit.org" + link
+            results.append({
+                "source": "Érudit", "icon": "📚",
+                "title": title, "authors": "", "url": link, "pdf_url": "",
+                "snippet": snip_el.get_text(strip=True)[:300] if snip_el else "",
+                "open_access": True, "language": "fr",
+            })
+        return results or []
     except Exception as ex:
         return [{"source":"Érudit","icon":"📚","title":f"Error: {ex}","url":"","pdf_url":"","snippet":"","authors":""}]
 
 
+# ── Global North search functions ────────────────────────────────────────────
+
+def _search_semantic_scholar(query, limit=5):
+    url = "https://api.semanticscholar.org/graph/v1/paper/search"
+    params = {
+        "query": query,
+        "limit": limit,
+        "fields": "title,authors,abstract,year,journal,openAccessPdf",
+    }
+    try:
+        r = requests.get(url, params=params, timeout=10, headers={"User-Agent": "Scholara/1.0"})
+        r.raise_for_status()
+        items = r.json().get("data", [])
+        results = []
+        for item in items[:limit]:
+            pdf = item.get("openAccessPdf") or {}
+            results.append({
+                "source":  "semantic_scholar", "icon": "🔬",
+                "title":   item.get("title", "—"),
+                "authors": [a.get("name", "") for a in item.get("authors", [])],
+                "snippet": (item.get("abstract") or "")[:300],
+                "url":    f"https://www.semanticscholar.org/paper/{item.get('paperId', '')}",
+                "pdf_url": pdf.get("url", ""),
+                "year":    str(item.get("year") or ""),
+                "journal": (item.get("journal") or {}).get("name", ""),
+            })
+        return results
+    except Exception as ex:
+        return [{"source": "semantic_scholar", "icon": "🔬", "title": f"Error: {ex}",
+                 "authors": [], "snippet": "", "url": "", "pdf_url": ""}]
+
+
+def _search_pubmed(query, limit=5):
+    base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+    try:
+        r = requests.get(f"{base}/esearch.fcgi",
+                         params={"db": "pubmed", "term": query, "retmax": limit, "retmode": "json"},
+                         timeout=10)
+        r.raise_for_status()
+        ids = r.json().get("esearchresult", {}).get("idlist", [])
+        if not ids:
+            return []
+        r2 = requests.get(f"{base}/esummary.fcgi",
+                          params={"db": "pubmed", "id": ",".join(ids), "retmode": "json"},
+                          timeout=10)
+        r2.raise_for_status()
+        result_map = r2.json().get("result", {})
+        results = []
+        for uid in ids:
+            doc = result_map.get(uid, {})
+            authors = [a.get("name", "") for a in doc.get("authors", [])]
+            results.append({
+                "source":  "pubmed", "icon": "🧬",
+                "title":   doc.get("title", "—"),
+                "authors": authors,
+                "snippet": "",
+                "url":    f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
+                "pdf_url": "",
+                "year":    str(doc.get("pubdate", ""))[:4],
+                "journal": doc.get("fulljournalname", ""),
+            })
+        return results
+    except Exception as ex:
+        return [{"source": "pubmed", "icon": "🧬", "title": f"Error: {ex}",
+                 "authors": [], "snippet": "", "url": "", "pdf_url": ""}]
+
+
+def _search_crossref(query, limit=5):
+    url = "https://api.crossref.org/works"
+    params = {
+        "query": query, "rows": limit,
+        "select": "title,author,abstract,DOI,published,container-title",
+    }
+    try:
+        r = requests.get(url, params=params, timeout=10,
+                         headers={"User-Agent": "Scholara/1.0 (mailto:scholara@example.com)"})
+        r.raise_for_status()
+        items = r.json().get("message", {}).get("items", [])
+        results = []
+        for item in items[:limit]:
+            title = (item.get("title") or ["—"])[0]
+            authors = [
+                f"{a.get('given', '')} {a.get('family', '')}".strip()
+                for a in item.get("author", [])
+            ]
+            doi = item.get("DOI", "")
+            date_parts = (item.get("published") or {}).get("date-parts", [[]])[0]
+            year = str(date_parts[0]) if date_parts else ""
+            journal = (item.get("container-title") or [""])[0]
+            results.append({
+                "source":  "crossref", "icon": "📑",
+                "title":   title,
+                "authors": authors,
+                "snippet": (item.get("abstract") or "")[:300],
+                "url":    f"https://doi.org/{doi}" if doi else "",
+                "pdf_url": f"https://doi.org/{doi}" if doi else "",
+                "year":    year,
+                "journal": journal,
+            })
+        return results
+    except Exception as ex:
+        return [{"source": "crossref", "icon": "📑", "title": f"Error: {ex}",
+                 "authors": [], "snippet": "", "url": "", "pdf_url": ""}]
+
+
+def _search_core(query, limit=5):
+    api_key = AIConfig.CORE_API_KEY
+    if not api_key:
+        return []
+    url = "https://api.core.ac.uk/v3/search/works"
+    try:
+        r = requests.get(url, params={"q": query, "limit": limit},
+                         headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
+        r.raise_for_status()
+        items = r.json().get("results", [])
+        results = []
+        for item in items[:limit]:
+            authors = item.get("authors") or []
+            author_names = [a.get("name", "") if isinstance(a, dict) else str(a) for a in authors]
+            results.append({
+                "source":  "core", "icon": "🗄️",
+                "title":   item.get("title", "—"),
+                "authors": author_names,
+                "snippet": (item.get("abstract") or "")[:300],
+                "url":    item.get("downloadUrl") or item.get("sourceFulltextUrls", [""])[0],
+                "pdf_url": item.get("downloadUrl", ""),
+                "year":    str(item.get("yearPublished") or ""),
+                "journal": item.get("publisher", ""),
+            })
+        return results
+    except Exception as ex:
+        return [{"source": "core", "icon": "🗄️", "title": f"Error: {ex}",
+                 "authors": [], "snippet": "", "url": "", "pdf_url": ""}]
+
+
+def _search_base(query, limit=5):
+    url = "https://api.base-search.net/cgi-bin/BaseHttpSearchInterface.fcgi"
+    params = {"func": "PerformSearch", "query": query, "hits": limit, "format": "json"}
+    try:
+        r = requests.get(url, params=params, timeout=10, headers={"User-Agent": "Scholara/1.0"})
+        r.raise_for_status()
+        docs = r.json().get("response", {}).get("docs", [])
+        results = []
+        for doc in docs[:limit]:
+            titles = doc.get("dctitle") or ["—"]
+            creators = doc.get("dccreator") or []
+            descriptions = doc.get("dcdescription") or [""]
+            identifiers = doc.get("dcidentifier") or [""]
+            dates = doc.get("dcdate") or [""]
+            results.append({
+                "source":  "base", "icon": "🌐",
+                "title":   titles[0] if titles else "—",
+                "authors": creators if isinstance(creators, list) else [creators],
+                "snippet": descriptions[0][:300] if descriptions else "",
+                "url":    identifiers[0] if identifiers else "",
+                "pdf_url": "",
+                "year":    str(dates[0])[:4] if dates else "",
+                "journal": "",
+            })
+        return results
+    except Exception as ex:
+        return [{"source": "base", "icon": "🌐", "title": f"Error: {ex}",
+                 "authors": [], "snippet": "", "url": "", "pdf_url": ""}]
+
+
 @app.post("/api/search")
 def search(req: SearchRequest):
-    results = []
+    lang = req.lang or _detect_lang(req.query)
+
     src_map = {
         "arxiv":       _search_arxiv,
         "gutenberg":   _search_gutenberg,
@@ -853,12 +1181,54 @@ def search(req: SearchRequest):
         "openedition": _search_openedition,
         "erudit":      _search_erudit,
     }
-    per = req.limit // max(len(req.sources), 1) + 2
-    for src in req.sources:
-        fn = src_map.get(src)
-        if fn:
+    if AIConfig.is_north():
+        src_map.update({
+            "semantic_scholar": _search_semantic_scholar,
+            "pubmed":           _search_pubmed,
+            "crossref":         _search_crossref,
+            "core":             _search_core,
+            "base":             _search_base,
+        })
+
+    # Reorder: put language-matched sources first
+    requested = req.sources
+    if lang == "fr":
+        priority = [s for s in requested if s in _FR_SOURCES]
+        rest     = [s for s in requested if s not in _FR_SOURCES]
+    else:
+        priority = [s for s in requested if s in _EN_SOURCES]
+        rest     = [s for s in requested if s not in _EN_SOURCES]
+    ordered_sources = priority + rest
+
+    # Allocate more results to language-matched sources
+    n_priority = max(len(priority), 1)
+    n_rest     = max(len(rest), 1)
+    per_priority = max(req.limit // n_priority, 10)
+    per_rest     = max(req.limit // (n_priority + n_rest) + 2, 6)
+
+    results = []
+    for src in ordered_sources:
+        fn  = src_map.get(src)
+        if not fn:
+            continue
+        per = per_priority if src in (priority if lang == "fr" else priority) else per_rest
+        # Pass lang to sources that support filtering
+        if src in ("openalex", "doaj"):
+            results.extend(fn(req.query, per, lang=lang))
+        else:
             results.extend(fn(req.query, per))
-    return {"results": results[:req.limit * 2]}
+
+    # Stable sort: exact language match floats to top, unmatched sink
+    def _lang_rank(r):
+        rl = (r.get("language") or "").lower()
+        if rl == lang:
+            return 0   # exact match
+        if rl == "":
+            return 1   # unknown — keep in position
+        return 2       # different language
+
+    results.sort(key=_lang_rank)
+    return {"results": results[:max(req.limit, 100)], "detected_lang": lang}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -888,20 +1258,24 @@ async def nl_search(request: Request):
     if not routing.get("sources"):
         return {"routing": routing, "results": [], "message": "No sources selected."}
 
+    query_lang = _detect_lang(user_query)
     results = []
     for source in routing["sources"]:
         query = routing.get("queries", {}).get(source, user_query)
-        results.extend(_search_source(source, query))
+        results.extend(_search_source(source, query, lang=query_lang))
+
+    results.sort(key=lambda r: 0 if (r.get("language") or "").lower() == query_lang else 1)
 
     return {
-        "success":    True,
-        "routing":    routing,
-        "results":    results[:50],
-        "ai_backend": AIConfig.BACKEND,
+        "success":      True,
+        "routing":      routing,
+        "results":      results[:50],
+        "ai_backend":   AIConfig.BACKEND,
+        "detected_lang": query_lang,
     }
 
 
-def _search_source(source: str, query: str, limit: int = 5) -> list:
+def _search_source(source: str, query: str, limit: int = 10, lang: str = "") -> list:
     src_map = {
         "arxiv":            _search_arxiv,
         "gutenberg":        _search_gutenberg,
@@ -914,8 +1288,24 @@ def _search_source(source: str, query: str, limit: int = 5) -> list:
         "openedition":      _search_openedition,
         "erudit":           _search_erudit,
     }
+    if AIConfig.is_north():
+        src_map.update({
+            "semantic_scholar": _search_semantic_scholar,
+            "pubmed":           _search_pubmed,
+            "crossref":         _search_crossref,
+            "core":             _search_core,
+            "base":             _search_base,
+        })
     fn = src_map.get(source)
-    return fn(query, limit) if fn else []
+    if fn is None and source in {"semantic_scholar", "pubmed", "crossref", "core", "base"}:
+        import logging
+        logging.warning("GN source '%s' requested but MARKET_SEGMENT is not global-north", source)
+        return []
+    if fn is None:
+        return []
+    if source in ("openalex", "doaj"):
+        return fn(query, limit, lang=lang)
+    return fn(query, limit)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1053,7 +1443,7 @@ def get_file(filename: str):
     f = _get_download_dir() / filename
     if not f.exists():
         raise HTTPException(404)
-    return FileResponse(str(f))
+    return FileResponse(str(f), content_disposition_type="inline")
 
 @app.delete("/api/file/{filename}")
 def delete_file(filename: str):
@@ -1189,7 +1579,30 @@ def _open_browser():
     time.sleep(1.2)
     webbrowser.open("http://127.0.0.1:7860")
 
+def _free_port(port: int):
+    import signal, socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return  # port already free
+    except Exception:
+        return
+    # Port is occupied — find and kill the owner
+    try:
+        import subprocess as sp
+        out = sp.check_output(["lsof", "-ti", f":{port}"], text=True).strip()
+        for pid in out.splitlines():
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+                print(f"  [info] Released port {port} (pid {pid})")
+            except Exception:
+                pass
+        time.sleep(0.5)
+    except Exception:
+        pass
+
 if __name__ == "__main__":
+    _free_port(7860)
     print("=" * 54)
     print("  Scholara — Open Knowledge, Everywhere")
     print("  http://127.0.0.1:7860")

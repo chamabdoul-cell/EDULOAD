@@ -37,6 +37,7 @@
   --border: #3a3628;
   --muted:  #8a8070;
   --panel:  #0f0e0a;
+  --teal:   #4dbdbd;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -508,11 +509,9 @@ textarea { resize: vertical; min-height: 80px; }
 .results-grid {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-  align-content: start;
+  padding: 8px 16px 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .result-card {
@@ -540,7 +539,24 @@ textarea { resize: vertical; min-height: 80px; }
 .card-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
 .card-meta { flex: 1; min-width: 0; }
 .card-source { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-.card-title  { font-family: 'Syne', sans-serif; font-size: 0.88rem; font-weight: 600; line-height: 1.3; color: var(--ink); margin-top: 2px; }
+.card-title  { font-family: 'Syne', sans-serif; font-size: 0.92rem; font-weight: 600; line-height: 1.4; color: var(--ink); margin-top: 2px; }
+.card-title a { color: var(--ink); text-decoration: none; }
+.card-title a:hover { color: var(--teal); text-decoration: underline; }
+.card-year-journal { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+/* Simple result list items */
+.result-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.result-item:last-child { border-bottom: none; }
+.result-title { font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 600; line-height: 1.4; }
+.result-title-link { color: var(--teal); text-decoration: none; }
+.result-title-link:hover { text-decoration: underline; }
+.result-title-plain { color: var(--ink); }
+.result-byline { font-size: 0.75rem; color: var(--muted); }
 .card-authors { font-style: italic; font-size: 0.78rem; color: var(--muted); }
 .card-snippet {
   font-size: 0.8rem; color: var(--muted); line-height: 1.5;
@@ -700,6 +716,21 @@ textarea { resize: vertical; min-height: 80px; }
           <label class="chk-label"><input type="checkbox" name="src" value="gutenberg" checked> 📚 Gutenberg</label>
           <label class="chk-label"><input type="checkbox" name="src" value="archive" checked> 🏛 Archive</label>
         </div>
+        <fieldset style="border:1px solid var(--border); border-radius:6px; padding:8px; margin-top:8px;">
+          <legend style="font-family:var(--font-mono); font-size:0.75rem; padding:0 4px;">Francophone</legend>
+          <label class="chk-label"><input type="checkbox" name="src" value="hal" checked> 🏛️ HAL</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="persee"> 📜 Persée</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="openedition"> 📖 OpenEdition</label>
+          <label class="chk-label"><input type="checkbox" name="src" value="erudit"> 📚 Érudit</label>
+        </fieldset>
+        <fieldset id="gn-sources" style="display:none; border:1px solid var(--border); border-radius:6px; padding:8px; margin-top:8px;">
+          <legend style="font-family:var(--font-mono); font-size:0.75rem; padding:0 4px;" data-i18n="gn_sources_label">Global North Sources</legend>
+          <label class="chk-label"><input type="checkbox" name="src" value="semantic_scholar" checked> 🔬 <span data-i18n="semantic_scholar_label">Semantic Scholar</span></label>
+          <label class="chk-label"><input type="checkbox" name="src" value="pubmed"> 🧬 <span data-i18n="pubmed_label">PubMed</span></label>
+          <label class="chk-label"><input type="checkbox" name="src" value="crossref"> 📑 <span data-i18n="crossref_label">CrossRef</span></label>
+          <label class="chk-label"><input type="checkbox" name="src" value="core"> 🗄️ <span data-i18n="core_label">CORE</span></label>
+          <label class="chk-label"><input type="checkbox" name="src" value="base"> 🌐 <span data-i18n="base_label">BASE</span></label>
+        </fieldset>
       </div>
       <button class="btn btn-primary btn-full" id="btnSearch">
         <span class="spin" id="searchSpin"></span>
@@ -713,6 +744,13 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="field">
         <label data-i18n="url_label">Open-access URL (PDF, document, …)</label>
         <input type="url" id="urlInput" data-i18n-placeholder="url_placeholder" placeholder="https://arxiv.org/pdf/… or https://archive.org/…">
+      </div>
+      <div id="disclaimer-block" style="display:none; margin-bottom:8px;">
+        <label style="font-size:0.8rem; color:var(--muted); display:flex; gap:6px; align-items:flex-start;">
+          <input type="checkbox" id="disclaimer-accepted" style="margin-top:2px;">
+          <span>I understand that downloading from some platforms may be subject to their
+          Terms of Service. I am solely responsible for compliance with applicable law.</span>
+        </label>
       </div>
       <button class="btn btn-primary btn-full" id="btnDownload">
         <span class="spin" id="dlSpin"></span>
@@ -816,6 +854,8 @@ textarea { resize: vertical; min-height: 80px; }
 <aside class="viewer">
   <div class="viewer-toolbar">
     <span class="viewer-title" id="viewerTitle">No file open</span>
+    <a id="viewerExtLink" href="#" target="_blank" rel="noopener noreferrer"
+       class="icon-btn" title="Open in new tab" style="display:none;text-decoration:none">↗</a>
     <button class="icon-btn" id="closeViewer">✕</button>
   </div>
   <div class="viewer-body" id="viewerBody">
@@ -825,7 +865,7 @@ textarea { resize: vertical; min-height: 80px; }
     </div>
     <video  id="viewerVideo"  controls></video>
     <audio  id="viewerAudio"  controls></audio>
-    <iframe id="viewerIframe" sandbox="allow-scripts allow-same-origin"></iframe>
+    <iframe id="viewerIframe"></iframe>
     <div    id="viewerText"></div>
   </div>
 </aside>
@@ -936,6 +976,15 @@ textarea { resize: vertical; min-height: 80px; }
       </label>
     </div>
 
+    <div class="settings-row">
+      <label>Market Segment</label>
+      <select id="market-segment-select" onchange="saveSetting('market_segment', this.value)">
+        <option value="global-south">Global South (open-access only, offline-first)</option>
+        <option value="global-north">Global North (full sources, paid license)</option>
+      </select>
+      <small style="color:var(--muted)">Restart the server after changing this setting.</small>
+    </div>
+
     <div style="text-align:right;margin-top:20px">
       <button class="btn btn-secondary" id="settingsClose" data-i18n="close_btn">Close</button>
     </div>
@@ -1003,6 +1052,12 @@ const TRANSLATIONS = {
     url_required:        "Paste an open-access URL first.",
     search_no_query:     "Enter a search query first.",
     convert_no_file:     "Select a file first.",
+    gn_sources_label:    "Global North Sources",
+    semantic_scholar_label: "Semantic Scholar",
+    pubmed_label:        "PubMed",
+    crossref_label:      "CrossRef",
+    core_label:          "CORE",
+    base_label:          "BASE",
   },
   fr: {
     tagline:             "Le Savoir Ouvert, Partout",
@@ -1062,6 +1117,12 @@ const TRANSLATIONS = {
     url_required:        "Collez d'abord une URL en libre accès.",
     search_no_query:     "Saisissez une requête de recherche.",
     convert_no_file:     "Sélectionnez d'abord un fichier.",
+    gn_sources_label:    "Sources Global Nord",
+    semantic_scholar_label: "Semantic Scholar",
+    pubmed_label:        "PubMed",
+    crossref_label:      "CrossRef",
+    core_label:          "CORE",
+    base_label:          "BASE",
   }
 };
 
@@ -1110,7 +1171,11 @@ const $  = id => document.getElementById(id);
 const fmtBytes = b => b > 1e6 ? (b/1e6).toFixed(1)+'MB' : b > 1e3 ? (b/1e3).toFixed(0)+'KB' : b+'B';
 const extIcon  = e => ({'pdf':'📄','mp4':'🎬','mp3':'🎵','docx':'📝','doc':'📝','html':'🌐',
                          'htm':'🌐','txt':'📃','epub':'📖','zip':'📦','srt':'💬'}[e] || '📁');
-const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc = s => {
+  if (s == null) return '';
+  if (Array.isArray(s)) s = s[0] ?? '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+};
 const VIEWABLE_EXTS = ['mp4','webm','mkv','avi','mov','mp3','ogg','wav','flac','pdf','html','htm','txt','srt','md'];
 
 function showMsg(el, type, text) {
@@ -1153,6 +1218,12 @@ async function loadStatus() {
     });
     renderFileList(d.files);
     populateConvertSelect(d.files);
+    if (d.market_segment === "global-north") {
+      document.getElementById("disclaimer-block").style.display = "block";
+      document.getElementById("gn-sources").style.display = "block";
+    }
+    const seg = document.getElementById("market-segment-select");
+    if (seg && d.market_segment) seg.value = d.market_segment;
   } catch(e) {}
 }
 
@@ -1269,22 +1340,50 @@ async function cancelJob(jobId) {
 $('btnClearDone').addEventListener('click', () => { renderQueuePanel(); loadStatus(); });
 
 // ── Search ────────────────────────────────────────────────────────
+const DEFAULT_SOURCES    = ['arxiv','openalex','doaj','gutenberg','archive','hal'];
+const FR_SOURCES_EXTRA   = ['hal','persee','openedition','erudit'];
+const FR_STOPWORDS = new Set([
+  'le','la','les','de','du','des','un','une','et','en','au','aux','sur',
+  'avec','pour','par','que','qui','dans','est','sont','il','elle','nous',
+  'vous','ils','elles','ce','se','ne','pas','plus','où','méthode','méthodes',
+  'analyse','résultats','étude','approche','modèle','modèles','théorie',
+  'éléments','finis','calcul','numérique','équation','solution','problème',
+]);
+
+function detectLang(text) {
+  const words = text.toLowerCase().split(/\s+/);
+  const hits  = words.filter(w => FR_STOPWORDS.has(w)).length;
+  return hits >= 2 ? 'fr' : 'en';
+}
+
 $('btnSearch').addEventListener('click', async () => {
   const text = $('nlInput').value.trim();
   if (!text) return;
-  const srcs = [...document.querySelectorAll('input[name=src]:checked')].map(x => x.value);
+  const lang    = detectLang(text);
+  const checked = [...document.querySelectorAll('input[name=src]:checked')].map(x => x.value);
+  let sources   = checked.length ? checked : DEFAULT_SOURCES;
+  // For French queries, ensure French-native sources are included
+  if (lang === 'fr') {
+    const extra = FR_SOURCES_EXTRA.filter(s => !sources.includes(s));
+    sources = [...sources, ...extra];
+  }
   $('searchSpin').classList.add('active');
   $('btnSearch').disabled = true;
   try {
-    const r = await fetch('/api/nl_search', {
+    const r = await fetch('/api/search', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text, sources: srcs})
+      body: JSON.stringify({query: text, sources, limit: 50, lang})
     });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     allResults = d.results || [];
     activeFilter = 'all';
     renderResults();
-    showMsg($('searchMsg'), 'ok', `${allResults.length} results found.`);
+    const langHint = d.detected_lang === 'fr' ? ' 🇫🇷' : d.detected_lang === 'en' ? ' 🇬🇧' : '';
+    const msg = allResults.length
+      ? `${allResults.length} résultats / results${langHint}`
+      : 'Aucun résultat / No results';
+    showMsg($('searchMsg'), allResults.length ? 'ok' : 'err', msg);
   } catch(e) {
     showMsg($('searchMsg'), 'err', 'Search failed: ' + e.message);
   } finally {
@@ -1332,31 +1431,26 @@ function renderResults() {
   }
 
   grid.innerHTML = filtered.map((r, i) => {
-    const banner = getCardBanner(r);
-    const bannerHtml = banner
-      ? `<img src="${esc(banner)}" alt="" loading="lazy"
-           onerror="this.style.display='none'"
-           style="width:calc(100% + 28px);height:120px;object-fit:cover;border-radius:4px 4px 0 0;margin:-14px -14px 10px -14px;display:block">`
-      : '';
-    const headerThumb = !banner && r.thumbnail
-      ? `<img class="card-thumb" src="${esc(r.thumbnail)}" alt="" loading="lazy" onerror="this.style.display='none'">`
-      : (!banner ? `<span class="card-icon">${r.icon||'📄'}</span>` : '');
+    const openUrl = r.url || r.link || '';
+    const pdfUrl  = r.pdf_url || '';
+    const authors = Array.isArray(r.authors)
+      ? r.authors.slice(0, 3).join(', ')
+      : (r.authors || '');
+    const journal = Array.isArray(r.journal) ? (r.journal[0] || '') : (r.journal || '');
+    const byline = [authors, r.year ? String(r.year) : '', journal ? `<em>${esc(journal)}</em>` : '', esc(r.source || '')]
+      .filter(Boolean).join(' · ');
+    const snippet = Array.isArray(r.snippet) ? (r.snippet[0] || '') : (r.snippet || '');
+    const titleHtml = openUrl
+      ? `<a class="result-title-link" href="${esc(openUrl)}" target="_blank" rel="noopener noreferrer">${esc(r.title || '—')}</a>`
+      : pdfUrl
+        ? `<a class="result-title-link" href="${esc(pdfUrl)}" target="_blank" rel="noopener noreferrer">${esc(r.title || '—')}</a>`
+        : `<span class="result-title-plain">${esc(r.title || '—')}</span>`;
     return `
-    <div class="result-card" style="animation:fadeIn 0.2s ${i*0.03}s both">
-      ${bannerHtml}
-      <div class="card-header">
-        ${headerThumb}
-        <div class="card-meta">
-          <div class="card-source">${esc(r.source)}</div>
-          <div class="card-title">${esc(r.title)}</div>
-          ${r.authors ? `<div class="card-authors">${esc(r.authors)}</div>` : ''}
-        </div>
-      </div>
-      ${r.snippet ? `<div class="card-snippet">${esc(r.snippet)}</div>` : ''}
-      <div class="card-actions">
-        ${r.url ? `<button class="card-btn" onclick="window.open('${esc(r.url)}','_blank')">🔗 Open</button>` : ''}
-        ${r.pdf_url ? `<button class="card-btn dl" onclick="quickDownload('${esc(r.pdf_url)}')">⬇ Download</button>` : ''}
-      </div>
+    <div class="result-item" style="animation:fadeIn 0.12s ${i*0.02}s both">
+      <div class="result-title">${titleHtml}</div>
+      ${byline ? `<div class="result-byline">${byline}</div>` : ''}
+      ${snippet ? `<div class="card-snippet">${esc(snippet)}</div>` : ''}
+      ${pdfUrl ? `<button class="card-btn dl" style="margin-top:6px" onclick="quickDownload('${esc(pdfUrl)}')">⬇ Download PDF</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -1370,9 +1464,10 @@ $('btnDownload').addEventListener('click', async () => {
   $('urlProgressFill').style.width = '0%';
   $('urlProgressPct').textContent = $('urlProgressSpeed').textContent = $('urlProgressEta').textContent = $('urlProgressDone').textContent = '';
   try {
+    const disclaimerAccepted = document.getElementById("disclaimer-accepted")?.checked ?? false;
     const r = await fetch('/api/download', {
       method:'POST', headers:{'Content-Type':'application/json','Accept-Language':currentLang},
-      body: JSON.stringify({url})
+      body: JSON.stringify({url, disclaimer_accepted: disclaimerAccepted})
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Download failed');
@@ -1412,9 +1507,10 @@ $('modalConfirm').addEventListener('click', async () => {
   $('modalSpin').classList.add('active');
   $('modalConfirm').disabled = true;
   try {
+    const disclaimerAccepted = document.getElementById("disclaimer-accepted")?.checked ?? false;
     const r = await fetch('/api/download', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url})
+      body: JSON.stringify({url, disclaimer_accepted: disclaimerAccepted})
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'failed');
@@ -1476,6 +1572,11 @@ async function openViewer(name, ext) {
   $('viewerVideo').style.display = $('viewerAudio').style.display =
   $('viewerIframe').style.display = $('viewerText').style.display = 'none';
 
+  // Always show the "open in new tab" link in the toolbar
+  const extLink = $('viewerExtLink');
+  extLink.href = url;
+  extLink.style.display = 'inline-flex';
+
   if (['mp4','webm','mkv','avi','mov'].includes(ext)) {
     const v = $('viewerVideo');
     [...v.querySelectorAll('track')].forEach(t => t.remove());
@@ -1495,8 +1596,30 @@ async function openViewer(name, ext) {
     }
   } else if (['mp3','ogg','wav','flac','aac'].includes(ext)) {
     const a = $('viewerAudio'); a.src = url; a.style.display = 'block';
-  } else if (['pdf','html','htm'].includes(ext)) {
-    const f = $('viewerIframe'); f.src = url; f.style.display = 'block';
+  } else if (ext === 'pdf') {
+    // Use an <object> tag for PDFs — avoids Chrome's iframe sandbox PDF block
+    const body = $('viewerBody');
+    let obj = body.querySelector('.pdf-object');
+    if (!obj) {
+      obj = document.createElement('object');
+      obj.className = 'pdf-object';
+      obj.style.cssText = 'width:100%;height:100%;border:none;display:block';
+      body.appendChild(obj);
+    }
+    obj.data = url + '#toolbar=1&view=FitH';
+    obj.type = 'application/pdf';
+    obj.style.display = 'block';
+    // Fallback message inside <object> for browsers that can't render PDF
+    obj.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted)">
+      <p>PDF cannot be displayed inline.</p>
+      <a href="${url}" target="_blank" class="card-btn" style="margin-top:12px;display:inline-block">
+        Open PDF in new tab ↗
+      </a>
+    </div>`;
+  } else if (['html','htm'].includes(ext)) {
+    const f = $('viewerIframe');
+    f.src = url;
+    f.style.display = 'block';
   } else if (['txt','srt','md'].includes(ext)) {
     fetch(url).then(r => r.text()).then(t => { const d = $('viewerText'); d.textContent = t; d.style.display = 'block'; });
   } else {
@@ -1505,10 +1628,17 @@ async function openViewer(name, ext) {
   }
 }
 
+function _clearPdfObject() {
+  const obj = document.querySelector('.pdf-object');
+  if (obj) { obj.data = 'about:blank'; obj.style.display = 'none'; }
+}
+
 $('closeViewer').addEventListener('click', () => {
   $('viewerVideo').pause?.(); $('viewerAudio').pause?.();
   $('viewerVideo').style.display = $('viewerAudio').style.display =
   $('viewerIframe').style.display = $('viewerText').style.display = 'none';
+  _clearPdfObject();
+  $('viewerExtLink').style.display = 'none';
   $('viewerPlaceholder').style.display = 'flex';
   $('viewerPlaceholder').innerHTML = `<div class="vp-icon">🔬</div><p>${t('viewer_placeholder')}</p>`;
   $('viewerTitle').textContent = t('viewer_no_file');

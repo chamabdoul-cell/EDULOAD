@@ -1,3 +1,9 @@
+FRENCH_KEYWORDS = {
+    "french", "français", "francophone", "france",
+    "québec", "belgique", "suisse", "afrique francophone",
+    "hal", "persée", "érudit", "openedition",
+}
+
 _FRENCH_WORDS = [
     "le", "la", "les", "un", "une", "des", "du", "de", "en", "est", "et",
     "pour", "sur", "dans", "avec", "qui", "que", "par", "au", "aux",
@@ -16,9 +22,9 @@ def _is_french(text: str) -> bool:
 def fallback_routing(user_input: str) -> dict:
     query_lower = user_input.lower()
     sources, queries = [], {}
-    is_fr = _is_french(user_input)
+    is_fr = _is_french(user_input) or any(kw in query_lower for kw in FRENCH_KEYWORDS)
 
-    # Francophone sources when query is in French
+    # Francophone sources when query is in French or mentions Francophone keywords
     if is_fr:
         sources.append("hal")
         queries["hal"] = user_input

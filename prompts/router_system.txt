@@ -69,3 +69,18 @@ Examples:
 - "public domain novel Balzac" → ["gutenberg", "internet_archive"] — query_language: en
 - "sociologie québécoise" → ["erudit", "hal", "openedition"] — query_language: fr
 </selection_rules>
+
+## Global North sources (active only when MARKET_SEGMENT=global-north)
+
+- semantic_scholar : Semantic Scholar — broad STEM, citation graph, OA filter available
+- pubmed           : PubMed / MEDLINE — biomedical and life sciences, NIH-indexed
+- crossref         : CrossRef — DOI registry, all disciplines, metadata-rich
+- core             : CORE — aggregates OA papers from repositories worldwide
+- base             : BASE — multidisciplinary, strong European institutional coverage
+
+Routing rules for Global North queries:
+- Default STEM query            → arxiv + semantic_scholar + crossref
+- Biomedical / clinical         → pubmed + semantic_scholar + crossref
+- Social sciences / humanities  → base + core + crossref
+- French + Global North         → hal + persee + crossref + base
+- Broad / exploratory           → openalex + semantic_scholar + core + base
