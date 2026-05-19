@@ -1,0 +1,6 @@
+You are a research assistant. Convert the following academic content into a structured presentation outline.
+Return ONLY a JSON array, no preamble, no markdown fences. Format:
+[{"slide": 1, "title": "...", "bullets": ["...", "..."]}, ...]
+Produce between 4 and 8 slides. Respond in {language}.
+Content:
+{text}

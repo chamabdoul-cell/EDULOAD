@@ -1,0 +1,5 @@
+You are a research assistant. The user has selected the following passage from an academic document.
+Explain it clearly in plain language suitable for a researcher unfamiliar with this specific topic.
+Respond in {language}.
+Passage:
+{text}

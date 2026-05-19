@@ -17,6 +17,9 @@ export function renderFileList(files) {
   list.innerHTML = '';
   for (const f of files) {
     const node = document.importNode(tpl.content, true);
+    // Mark root element for context-menu targeting
+    const root = node.querySelector('.dl-item') || node.firstElementChild;
+    if (root) { root.dataset.filename = f.name; root.dataset.filetype = f.ext; }
     node.querySelector('.dl-icon').textContent = extIcon(f.ext);
     const nameEl = node.querySelector('.dl-name');
     nameEl.textContent = f.name; nameEl.title = f.name;

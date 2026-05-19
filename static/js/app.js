@@ -6,6 +6,7 @@ import { loadStatus, renderQueuePanel } from './download.js';
 import { initDownload } from './download.js';
 import { initSearch } from './search.js';
 import { loadHistory, loadCollections, initCollections } from './collections.js';
+import { initDemo } from './demo.js';
 
 // Inject fadeIn keyframe animation
 const _st = document.createElement('style');
@@ -151,6 +152,7 @@ initAuth({ onLoginSuccess: () => {
 initDownload();
 initSearch();
 initCollections();
+initDemo();
 initSettings();
 loadStatus().then(s => { if (s && s.institution_branding) applyBranding(s.institution_branding); });
 loadSettings();

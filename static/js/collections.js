@@ -18,7 +18,7 @@ function renderHistory(items) {
     const date      = (h.ts || '').slice(0, 10);
     const size      = h.size_kb ? `${h.size_kb} KB` : '';
     const fileExists = currentFiles.some(f => f.name === h.filename);
-    return `<div class="hist-item" data-action="view-history" data-filename="${esc(h.filename)}" data-exists="${fileExists}">
+    return `<div class="hist-item" data-action="view-history" data-filename="${esc(h.filename)}" data-filetype="${esc((h.filename||'').split('.').pop().toLowerCase())}" data-exists="${fileExists}">
       <div class="hist-title" title="${esc(h.title||h.filename)}">${esc(h.title||h.filename||'—')}</div>
       <div class="hist-meta">
         <span class="hist-source">${esc(h.source||'')}</span>

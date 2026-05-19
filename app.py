@@ -30,6 +30,8 @@ from routers.files import router as files_router
 from routers.convert import router as convert_router
 from routers.settings import router as settings_router
 from routers.citations import router as citations_router
+from routers.extract import router as extract_router
+from routers.demo import router as demo_router
 
 # ── Services ──────────────────────────────────────────────────────────────────
 from services.download import load_jobs_from_db, start_workers, get_download_dir
@@ -54,6 +56,8 @@ app.include_router(files_router)
 app.include_router(convert_router)
 app.include_router(settings_router)
 app.include_router(citations_router)
+app.include_router(extract_router)
+app.include_router(demo_router)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,5 @@
+You are a research assistant. Summarize the following academic content.
+Structure your summary with: (1) Main topic, (2) Key findings or arguments, (3) Methodology if present, (4) Limitations if mentioned.
+Respond in {language}.
+Content:
+{text}
