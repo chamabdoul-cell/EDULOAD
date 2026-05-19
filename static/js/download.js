@@ -125,6 +125,10 @@ export async function loadStatus() {
     if (d.app_mode === 'multi_user') {
       document.getElementById('btnLogout').style.display = '';
       if (!getAccessToken()) { showLoginModal(); return; }
+    } else {
+      // single_user is always admin
+      const adminTab = document.getElementById('adminTab');
+      if (adminTab) adminTab.style.display = '';
     }
 
     currentFiles = d.files || [];
@@ -148,6 +152,7 @@ export async function loadStatus() {
     }
     const seg = document.getElementById('market-segment-select');
     if (seg && d.market_segment) seg.value = d.market_segment;
+    return d;
   } catch(e) {}
 }
 

@@ -37,3 +37,12 @@ def delete_entry(db: sqlite3.Connection, id: int) -> None:
 def get_entry(db: sqlite3.Connection, id: int) -> dict | None:
     row = db.execute("SELECT * FROM history WHERE id=?", (id,)).fetchone()
     return dict(row) if row else None
+
+
+def top_sources(db: sqlite3.Connection, limit: int = 5) -> list:
+    rows = db.execute(
+        """SELECT source, COUNT(*) AS n FROM history
+           GROUP BY source ORDER BY n DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]

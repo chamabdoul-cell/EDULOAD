@@ -29,9 +29,36 @@ def list_collections(user: dict = Depends(get_current_user)):
 @router.post("/collections")
 def create_collection(req: CollectionCreate, user: dict = Depends(get_current_user)):
     db    = get_db()
-    rowid = collections_repo.create_collection(db, req.name, req.description)
+    rowid = collections_repo.create_collection(db, req.name, req.description,
+                                               owner_id=user.get("id"))
     db.close()
     return {"id": rowid, "status": "ok"}
+
+
+@router.get("/collections/shared")
+def list_shared_collections(user: dict = Depends(get_current_user)):
+    institution_id = user.get("institution_id")
+    if not institution_id:
+        return []
+    db   = get_db()
+    rows = collections_repo.list_shared_collections(db, institution_id)
+    db.close()
+    return rows
+
+
+@router.post("/collections/{id}/share")
+def share_collection(id: int, user: dict = Depends(get_current_user)):
+    institution_id = user.get("institution_id")
+    if not institution_id:
+        raise HTTPException(400, "User has no institution")
+    db = get_db()
+    col = collections_repo.get_collection(db, id)
+    if not col:
+        db.close()
+        raise HTTPException(404, "Collection not found")
+    collections_repo.share_collection(db, id, institution_id)
+    db.close()
+    return {"status": "shared"}
 
 
 @router.get("/collections/{id}")

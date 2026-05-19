@@ -121,6 +121,7 @@ export function initCollections() {
   // New collection modal
   $('btnNewCollection').addEventListener('click', () => {
     $('collName').value = $('collDesc').value = '';
+    if ($('collShareWithInst')) $('collShareWithInst').checked = false;
     $('collModalMsg').className = 'msg';
     $('collModalBg').classList.add('open');
   });
@@ -128,15 +129,19 @@ export function initCollections() {
   $('collModalBg').addEventListener('click', e => { if(e.target===$('collModalBg')) $('collModalBg').classList.remove('open'); });
 
   $('collModalConfirm').addEventListener('click', async () => {
-    const name = $('collName').value.trim();
-    const desc = $('collDesc').value.trim();
+    const name  = $('collName').value.trim();
+    const desc  = $('collDesc').value.trim();
+    const share = $('collShareWithInst') && $('collShareWithInst').checked;
     if (!name) return showMsg($('collModalMsg'), 'err', t('coll_missing_name'));
     try {
       const r = await apiFetch('/api/collections', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({name, description: desc})
       });
-      if (!r.ok) throw new Error((await r.json()).detail || 'failed');
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'failed');
+      if (share && d.id)
+        await apiFetch(`/api/collections/${d.id}/share`, {method:'POST'}).catch(()=>{});
       $('collModalBg').classList.remove('open');
       loadCollections();
     } catch(e) { showMsg($('collModalMsg'), 'err', e.message); }

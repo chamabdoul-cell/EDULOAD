@@ -30,11 +30,18 @@ def _create_all_tables(con: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS institutions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL, country TEXT,
+            logo_url TEXT, primary_color TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS collections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL, description TEXT,
+            owner_id INTEGER, institution_id INTEGER, is_shared INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS search_queries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query_stem TEXT NOT NULL,
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS collection_items (

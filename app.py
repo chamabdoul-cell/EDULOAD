@@ -34,6 +34,7 @@ from routers.citations import router as citations_router
 # ── Services ──────────────────────────────────────────────────────────────────
 from services.download import load_jobs_from_db, start_workers, get_download_dir
 from services.convert import ffmpeg_available, pandoc_available
+import repositories.institutions as inst_repo
 
 BASE_DIR   = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
@@ -71,10 +72,13 @@ def _init_db():
         tags     TEXT
     )""")
     con.execute("""CREATE TABLE IF NOT EXISTS collections (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        name        TEXT NOT NULL,
-        description TEXT,
-        created_at  TEXT DEFAULT (datetime('now'))
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        name           TEXT NOT NULL,
+        description    TEXT,
+        owner_id       INTEGER,
+        institution_id INTEGER,
+        is_shared      INTEGER DEFAULT 0,
+        created_at     TEXT DEFAULT (datetime('now'))
     )""")
     con.execute("""CREATE TABLE IF NOT EXISTS collection_items (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,10 +101,12 @@ def _init_db():
         updated_at      TEXT DEFAULT (datetime('now'))
     )""")
     con.execute("""CREATE TABLE IF NOT EXISTS institutions (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        name       TEXT NOT NULL,
-        country    TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT NOT NULL,
+        country       TEXT,
+        logo_url      TEXT,
+        primary_color TEXT,
+        created_at    TEXT DEFAULT (datetime('now'))
     )""")
     con.execute("""CREATE TABLE IF NOT EXISTS users (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,6 +130,26 @@ def _init_db():
         target     TEXT,
         created_at TEXT DEFAULT (datetime('now'))
     )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS search_queries (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        query_stem TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+    )""")
+    con.commit()
+
+    # Migrate collections table
+    coll_cols = {row[1] for row in con.execute("PRAGMA table_info(collections)")}
+    for col, typedef in [("owner_id", "INTEGER"), ("institution_id", "INTEGER"),
+                         ("is_shared", "INTEGER DEFAULT 0")]:
+        if col not in coll_cols:
+            con.execute(f"ALTER TABLE collections ADD COLUMN {col} {typedef}")
+
+    # Migrate institutions table
+    inst_cols = {row[1] for row in con.execute("PRAGMA table_info(institutions)")}
+    for col, typedef in [("logo_url", "TEXT"), ("primary_color", "TEXT")]:
+        if col not in inst_cols:
+            con.execute(f"ALTER TABLE institutions ADD COLUMN {col} {typedef}")
+
     con.commit()
 
     existing = {row[1] for row in con.execute("PRAGMA table_info(history)")}
@@ -197,6 +223,20 @@ async def status():
     except Exception:
         pass
 
+    institution_branding = None
+    if AIConfig.APP_MODE == "multi_user":
+        try:
+            from auth.dependencies import get_current_user
+            con = get_db()
+            institutions = inst_repo.list_institutions(con)
+            con.close()
+            if institutions:
+                institution_branding = inst_repo.get_institution_branding(
+                    get_db(), institutions[0]["id"]
+                )
+        except Exception:
+            pass
+
     return {
         "tools":               {"ffmpeg": ffmpeg_available(), "pandoc": pandoc_available()},
         "files":               files,
@@ -213,7 +253,8 @@ async def status():
             + (["semantic_scholar", "pubmed", "crossref", "core", "base"]
                if AIConfig.is_north() else [])
         ),
-        "ytdlp_available": AIConfig.is_north(),
+        "ytdlp_available":        AIConfig.is_north(),
+        "institution_branding":   institution_branding,
     }
 
 

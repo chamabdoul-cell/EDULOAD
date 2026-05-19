@@ -737,6 +737,7 @@ textarea { resize: vertical; min-height: 80px; }
       <button class="tab" data-tab="convert" data-i18n="convert_tab">⚙️ Convert</button>
       <button class="tab" data-tab="history" data-i18n="history_tab">📋 History</button>
       <button class="tab" data-tab="collections" data-i18n="collections_tab">🗂 Collections</button>
+      <button class="tab" data-tab="admin" id="adminTab" style="display:none" data-i18n="admin_tab">📊 Admin</button>
     </div>
 
     <!-- Search panel -->
@@ -849,6 +850,15 @@ textarea { resize: vertical; min-height: 80px; }
         <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No collections yet.</div>
       </div>
     </div>
+
+    <!-- Admin analytics panel -->
+    <div class="tab-panel" id="tab-admin">
+      <div class="section-title" style="margin-bottom:8px" data-i18n="admin_analytics_title">Impact Analytics</div>
+      <div id="adminAnalytics">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">Loading…</div>
+      </div>
+      <canvas id="analyticsChart" width="280" height="120" style="margin-top:12px;display:block"></canvas>
+    </div>
   </div>
 
   <!-- Active downloads & queue -->
@@ -949,6 +959,10 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="field">
       <label data-i18n="coll_desc_label">Description (optional)</label>
       <input type="text" id="collDesc" placeholder="">
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+      <input type="checkbox" id="collShareWithInst" style="width:auto">
+      <label for="collShareWithInst" style="margin:0;font-size:0.8rem" data-i18n="coll_share_label">Share with institution</label>
     </div>
     <div class="row2" style="margin-top:14px">
       <button class="btn btn-secondary" id="collModalCancel" data-i18n="cancel_btn">Cancel</button>
@@ -1054,7 +1068,10 @@ const TRANSLATIONS = {
     url_tab:             "🔗 URL",
     convert_tab:         "⚙️ Convert",
     history_tab:         "📋 History",
-    collections_tab:     "🗂 Collections",
+    collections_tab:        "🗂 Collections",
+    admin_tab:              "📊 Admin",
+    admin_analytics_title:  "Impact Analytics",
+    coll_share_label:       "Share with institution",
     search_label:        "Describe what you need",
     search_placeholder:  "e.g. research paper on transformers, or classic French novel…",
     sources_label:       "Sources",
@@ -1129,7 +1146,10 @@ const TRANSLATIONS = {
     url_tab:             "🔗 URL",
     convert_tab:         "⚙️ Convertir",
     history_tab:         "📋 Historique",
-    collections_tab:     "🗂 Collections",
+    collections_tab:        "🗂 Collections",
+    admin_tab:              "📊 Admin",
+    admin_analytics_title:  "Analytique d'impact",
+    coll_share_label:       "Partager avec l'institution",
     search_label:        "Décrivez ce dont vous avez besoin",
     search_placeholder:  "ex. article sur les transformeurs, ou roman classique français…",
     sources_label:       "Sources",

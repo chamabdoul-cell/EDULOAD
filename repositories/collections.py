@@ -6,12 +6,30 @@ def list_collections(db: sqlite3.Connection) -> list:
     return [dict(r) for r in rows]
 
 
-def create_collection(db: sqlite3.Connection, name: str, description: str = "") -> int:
+def create_collection(db: sqlite3.Connection, name: str, description: str = "",
+                      owner_id: int | None = None) -> int:
     cur = db.execute(
-        "INSERT INTO collections (name,description) VALUES (?,?)", (name, description)
+        "INSERT INTO collections (name, description, owner_id) VALUES (?,?,?)",
+        (name, description, owner_id),
     )
     db.commit()
     return cur.lastrowid
+
+
+def share_collection(db: sqlite3.Connection, collection_id: int, institution_id: int) -> None:
+    db.execute(
+        "UPDATE collections SET institution_id=?, is_shared=1 WHERE id=?",
+        (institution_id, collection_id),
+    )
+    db.commit()
+
+
+def list_shared_collections(db: sqlite3.Connection, institution_id: int) -> list:
+    rows = db.execute(
+        "SELECT * FROM collections WHERE institution_id=? AND is_shared=1 ORDER BY created_at DESC",
+        (institution_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def get_collection(db: sqlite3.Connection, id: int) -> dict | None:

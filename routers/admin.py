@@ -95,6 +95,10 @@ def impact_summary(_user=Depends(_admin)):
     con             = get_db()
     all_history     = history_repo.get_history(con, limit=999999)
     all_users       = users_repo.list_users(con)
+    downloads_by_day = usage_repo.downloads_by_day(con, days=30)
+    top_queries      = usage_repo.top_queries(con, limit=10)
+    top_sources      = history_repo.top_sources(con, limit=5)
+    active_users_week = usage_repo.active_users_per_week(con)
     con.close()
 
     total_downloads = len(all_history)
@@ -108,7 +112,11 @@ def impact_summary(_user=Depends(_admin)):
         key=lambda x: x["n"], reverse=True,
     )
     return {
-        "total_downloads": total_downloads,
-        "total_users":     total_users,
-        "sources_used":    sources_used,
+        "total_downloads":  total_downloads,
+        "total_users":      total_users,
+        "sources_used":     sources_used,
+        "downloads_by_day": downloads_by_day,
+        "top_queries":      top_queries,
+        "top_sources":      top_sources,
+        "active_users_week": active_users_week,
     }

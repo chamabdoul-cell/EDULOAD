@@ -1,4 +1,4 @@
-const CACHE = 'scholara-v2';
+const CACHE = 'scholara-v3';
 const SHELL = [
   '/', '/static/index.html', '/static/manifest.json',
   '/static/js/app.js', '/static/js/i18n.js', '/static/js/auth.js',
