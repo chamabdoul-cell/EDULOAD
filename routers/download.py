@@ -1,11 +1,15 @@
 import json
 import time
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from auth.dependencies import get_current_user
 from services.download import download_jobs, enqueue_job, is_allowed_url
+from services.rate_limit import apply as rate_limit
+from services.quota import check_quota
+from services.audit import record_usage
 from db import get_db
 import repositories.queue as queue_repo
 
@@ -38,11 +42,16 @@ class DownloadRequest(BaseModel):
 
 
 @router.post("/download")
-def download_url(req: DownloadRequest, request: Request):
+def download_url(req: DownloadRequest, request: Request,
+                 user: dict = Depends(get_current_user)):
+    rate_limit(request, user)
+    check_quota(user["id"])
+
     url  = req.url.strip()
     lang = _get_lang(request)
     if not is_allowed_url(url):
         raise HTTPException(403, _msg("download_not_allowed", lang))
+
     meta = {
         "title":    req.title,
         "authors":  req.authors,
@@ -51,11 +60,12 @@ def download_url(req: DownloadRequest, request: Request):
         "language": req.language,
     }
     job_id = enqueue_job(url, meta=meta)
+    record_usage(user["id"], "/api/download")
     return {"job_id": job_id, "status": "queued"}
 
 
 @router.get("/progress/{job_id}")
-def progress_sse(job_id: str):
+def progress_sse(job_id: str, user: dict = Depends(get_current_user)):
     def gen():
         while True:
             job = download_jobs.get(job_id)
@@ -73,7 +83,7 @@ def progress_sse(job_id: str):
 
 
 @router.get("/queue")
-def get_queue():
+def get_queue(user: dict = Depends(get_current_user)):
     jobs   = list(download_jobs.values())
     queued = [j for j in jobs if j["status"] == "queued"]
     for i, j in enumerate(queued):
@@ -82,7 +92,7 @@ def get_queue():
 
 
 @router.delete("/queue/{job_id}")
-def cancel_job(job_id: str):
+def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
     job = download_jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")

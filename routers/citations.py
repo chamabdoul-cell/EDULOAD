@@ -1,8 +1,9 @@
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
+from auth.dependencies import get_current_user
 from db import get_db
 import repositories.history as history_repo
 
@@ -10,7 +11,8 @@ router = APIRouter(prefix="/api", tags=["citations"])
 
 
 @router.get("/cite/{history_id}")
-def cite_document(history_id: int, format: str = "bibtex"):
+def cite_document(history_id: int, format: str = "bibtex",
+                  user: dict = Depends(get_current_user)):
     db  = get_db()
     row = history_repo.get_entry(db, history_id)
     db.close()

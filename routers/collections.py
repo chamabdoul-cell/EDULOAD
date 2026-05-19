@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth.dependencies import get_current_user
 from db import get_db
 import repositories.collections as collections_repo
 
@@ -18,7 +19,7 @@ class CollectionAddItem(BaseModel):
 
 
 @router.get("/collections")
-def list_collections():
+def list_collections(user: dict = Depends(get_current_user)):
     db   = get_db()
     rows = collections_repo.list_collections(db)
     db.close()
@@ -26,7 +27,7 @@ def list_collections():
 
 
 @router.post("/collections")
-def create_collection(req: CollectionCreate):
+def create_collection(req: CollectionCreate, user: dict = Depends(get_current_user)):
     db    = get_db()
     rowid = collections_repo.create_collection(db, req.name, req.description)
     db.close()
@@ -34,7 +35,7 @@ def create_collection(req: CollectionCreate):
 
 
 @router.get("/collections/{id}")
-def get_collection(id: int):
+def get_collection(id: int, user: dict = Depends(get_current_user)):
     db  = get_db()
     col = collections_repo.get_collection(db, id)
     if not col:
@@ -46,7 +47,8 @@ def get_collection(id: int):
 
 
 @router.post("/collections/{id}/items")
-def add_to_collection(id: int, req: CollectionAddItem):
+def add_to_collection(id: int, req: CollectionAddItem,
+                      user: dict = Depends(get_current_user)):
     db  = get_db()
     col = collections_repo.get_collection(db, id)
     if not col:
@@ -58,7 +60,8 @@ def add_to_collection(id: int, req: CollectionAddItem):
 
 
 @router.delete("/collections/{id}/items/{item_id}")
-def remove_from_collection(id: int, item_id: int):
+def remove_from_collection(id: int, item_id: int,
+                            user: dict = Depends(get_current_user)):
     db = get_db()
     collections_repo.remove_item(db, id, item_id)
     db.close()
@@ -66,7 +69,7 @@ def remove_from_collection(id: int, item_id: int):
 
 
 @router.delete("/collections/{id}")
-def delete_collection(id: int):
+def delete_collection(id: int, user: dict = Depends(get_current_user)):
     db = get_db()
     collections_repo.delete_collection(db, id)
     db.close()
