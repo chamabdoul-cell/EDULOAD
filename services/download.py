@@ -6,6 +6,41 @@ from pathlib import Path
 from queue import Queue
 from uuid import uuid4
 
+_KNOWN_DOC_EXTS = {".pdf", ".docx", ".txt", ".html", ".htm", ".md", ".epub", ".doc", ".odt"}
+_CTYPE_EXT_MAP = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/msword": ".doc",
+    "text/plain": ".txt",
+    "text/html": ".html",
+    "text/markdown": ".md",
+}
+
+
+def _infer_ext(ctype: str, dest_path: Path) -> str | None:
+    """Return the correct extension from Content-Type, then magic bytes."""
+    ext = _CTYPE_EXT_MAP.get(ctype.split(";")[0].strip().lower())
+    if ext:
+        return ext
+    try:
+        header = dest_path.read_bytes()[:8]
+        if header[:4] == b"%PDF":
+            return ".pdf"
+        if header[:2] == b"PK":
+            return ".docx"
+    except Exception:
+        pass
+    return None
+
+
+def _is_html_content(dest_path: Path) -> bool:
+    """Return True if the file content is an HTML page (not a real document)."""
+    try:
+        snippet = dest_path.read_bytes()[:32].lower()
+        return snippet[:5] in (b"<!doc", b"<html") or b"<html" in snippet
+    except Exception:
+        return False
+
 from config.settings import AIConfig
 from db import get_db
 import repositories.history as history_repo
@@ -112,13 +147,18 @@ def _run_download_job(job_id: str, req_data: dict):
 
     try:
         parsed   = urllib.parse.urlparse(url)
-        filename = Path(parsed.path).name or "document"
-        if not Path(filename).suffix:
-            filename += ".pdf"
+        raw_name = Path(parsed.path).name or "document"
+        # Keep the filename as-is only if its extension is a known document type;
+        # otherwise append .pdf (handles arXiv IDs like "1706.03762" where
+        # pathlib misreads ".03762" as a suffix).
+        suffix = Path(raw_name).suffix.lower()
+        filename = raw_name if suffix in _KNOWN_DOC_EXTS else raw_name + ".pdf"
         dest_path = dl_dir / filename
         headers   = {"User-Agent": "Mozilla/5.0"}
         req2      = urllib.request.Request(url, headers=headers)
+        resp_ctype = ""
         with urllib.request.urlopen(req2, timeout=60) as resp:
+            resp_ctype = resp.headers.get("Content-Type", "")
             total      = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
             with open(dest_path, "wb") as f:
@@ -132,6 +172,23 @@ def _run_download_job(job_id: str, req_data: dict):
                         pct = round(downloaded / total * 100, 1)
                         job["progress"] = pct
                         _db_update_job(job_id, progress=pct)
+
+        # Reject HTML responses (login walls, error pages)
+        if _is_html_content(dest_path):
+            dest_path.unlink(missing_ok=True)
+            job["status"] = "error"
+            job["error"]  = "Server returned an HTML page — the resource may require login or is not directly downloadable."
+            _db_update_job(job_id, status="error", error=job["error"])
+            return
+
+        # Rename to correct extension if needed
+        correct_ext = _infer_ext(resp_ctype, dest_path)
+        if correct_ext and dest_path.suffix.lower() != correct_ext:
+            new_path = dest_path.with_suffix(correct_ext)
+            dest_path.rename(new_path)
+            dest_path = new_path
+            filename  = dest_path.name
+
         job["status"]   = "done"
         job["progress"] = 100
         job["file"]     = filename
@@ -139,7 +196,19 @@ def _run_download_job(job_id: str, req_data: dict):
 
         source  = urllib.parse.urlparse(url).netloc or "Direct"
         size_kb = int(dest_path.stat().st_size / 1024)
-        meta    = req_data.get("meta", {})
+        meta    = dict(req_data.get("meta", {}))
+
+        # Extract title from PDF metadata when not supplied by caller
+        if not meta.get("title") and dest_path.suffix.lower() == ".pdf":
+            try:
+                from pypdf import PdfReader
+                reader    = PdfReader(str(dest_path))
+                pdf_title = ((reader.metadata or {}).get("/Title") or "").strip()
+                if pdf_title:
+                    meta["title"] = pdf_title
+            except Exception:
+                pass
+
         try:
             db = get_db()
             history_repo.add_history_entry(

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import httpx
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -42,7 +43,32 @@ BASE_DIR   = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH    = BASE_DIR / "scholara.db"
 
-app = FastAPI(title="Scholara")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    _init_db()
+    _generate_pwa_icons()
+    load_jobs_from_db()
+    start_workers()
+
+    ollama_ok = False
+    try:
+        with urllib.request.urlopen(f"{AIConfig.OLLAMA_URL}/api/tags", timeout=2) as r:
+            ollama_ok = r.status == 200
+    except Exception:
+        pass
+
+    print("\n=== Scholara Status ===")
+    print(f"  {'[OK]' if ollama_ok else '[--]'} Ollama ({AIConfig.OLLAMA_MODEL})")
+    print(f"  {'[OK]' if AIConfig.DEEPSEEK_API_KEY else '[--]'} DeepSeek API")
+    print(f"  {'[OK]' if ffmpeg_available() else '[--]'} ffmpeg (conversion)")
+    print("  [OK] Direct HTTP: always available")
+    print(f"  [OK] Mode: {AIConfig.APP_MODE}  |  Segment: {AIConfig.MARKET_SEGMENT.value}")
+    print("======================\n")
+
+    yield  # app is running
+
+
+app = FastAPI(title="Scholara", lifespan=lifespan)
 app.mount("/static",    StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/downloads", StaticFiles(directory=str(BASE_DIR / "downloads")), name="downloads")
 
@@ -260,32 +286,6 @@ async def status():
         "ytdlp_available":        AIConfig.is_north(),
         "institution_branding":   institution_branding,
     }
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Startup / shutdown
-# ══════════════════════════════════════════════════════════════════════════════
-@app.on_event("startup")
-def startup_event():
-    _init_db()
-    _generate_pwa_icons()
-    load_jobs_from_db()
-    start_workers()
-
-    ollama_ok = False
-    try:
-        with urllib.request.urlopen(f"{AIConfig.OLLAMA_URL}/api/tags", timeout=2) as r:
-            ollama_ok = r.status == 200
-    except Exception:
-        pass
-
-    print("\n=== Scholara Status ===")
-    print(f"  {'[OK]' if ollama_ok else '[--]'} Ollama ({AIConfig.OLLAMA_MODEL})")
-    print(f"  {'[OK]' if AIConfig.DEEPSEEK_API_KEY else '[--]'} DeepSeek API")
-    print(f"  {'[OK]' if ffmpeg_available() else '[--]'} ffmpeg (conversion)")
-    print("  [OK] Direct HTTP: always available")
-    print(f"  [OK] Mode: {AIConfig.APP_MODE}  |  Segment: {AIConfig.MARKET_SEGMENT.value}")
-    print("======================\n")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

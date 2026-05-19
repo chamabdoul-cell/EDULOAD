@@ -227,3 +227,29 @@ class TestDemoEndpoint:
         with patch("routers.demo._call_ollama", new=AsyncMock(return_value="Explication en français.")):
             r = self._post(client, {"action": "explain", "text": "Contenu académique.", "language": "fr"})
         assert r.status_code == 200
+
+
+class TestRateLimit:
+
+    def test_extract_rate_limit_returns_429(self, temp_db):
+        from services.rate_limit import reset
+        reset()
+        client = _make_client(temp_db)
+        # 10/min limit — exhaust it
+        for _ in range(10):
+            client.post("/api/extract", json={"text": "short passage for rate limit test"})
+        r = client.post("/api/extract", json={"text": "one more"})
+        assert r.status_code == 429
+        assert "rate limit" in r.json()["detail"].lower()
+        reset()
+
+    def test_demo_rate_limit_returns_429(self, temp_db):
+        from services.rate_limit import reset
+        reset()
+        client = _make_client(temp_db)
+        # /api/demo uses the global apply() limiter: 30 req/min in single_user
+        for _ in range(30):
+            client.post("/api/demo", json={"action": "explain", "text": "x", "language": "en"})
+        r = client.post("/api/demo", json={"action": "explain", "text": "x", "language": "en"})
+        assert r.status_code == 429
+        reset()

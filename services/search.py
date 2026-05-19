@@ -24,6 +24,23 @@ _FR_STOPWORDS = {
     "finis","calcul","numérique","équation","équations","solution","problème",
 }
 
+# French content words that don't appear in English — catches queries without stopwords
+_FR_CONTENT_WORDS = {
+    "changement", "climatique", "histoire", "éducation", "recherche",
+    "afrique", "africain", "africains", "africaine", "africaines",
+    "université", "universités", "scientifique", "scientifiques",
+    "données", "résultats", "analyse", "étude", "études",
+    "français", "française", "langue", "auteur", "auteurs",
+    "subsaharienne", "subsahariens", "sahélien", "sahélienne",
+    "développement", "apprentissage", "automatique", "artificielle",
+    "numérique", "logiciel", "réseau", "santé", "médecine",
+    "politique", "économie", "société", "littérature", "philosophie",
+    "géographie", "mathématiques", "agronomie", "environnement",
+    "éducatif", "pédagogie", "enseignement", "apprentissages",
+}
+
+_FR_ACCENT_RE = re.compile(r'[éèêëàâîïôùûüçœæ]', re.IGNORECASE)
+
 
 def _first(v):
     if isinstance(v, list):
@@ -33,7 +50,17 @@ def _first(v):
 
 def detect_lang(text: str) -> str:
     words = set(text.lower().split())
-    return "fr" if len(words & _FR_STOPWORDS) >= 2 else "en"
+    # 1. Stopword match (common function words)
+    if len(words & _FR_STOPWORDS) >= 2:
+        return "fr"
+    # 2. French academic content word match
+    if words & _FR_CONTENT_WORDS:
+        return "fr"
+    # 3. Accented character frequency (>1.5% of non-space chars → French)
+    no_space = text.replace(" ", "")
+    if no_space and len(_FR_ACCENT_RE.findall(text)) / len(no_space) > 0.015:
+        return "fr"
+    return "en"
 
 
 def get_ai_router() -> AISearchRouter:
@@ -664,7 +691,10 @@ def deduplicate(results: list) -> tuple[list, int]:
 
 def aggregate_search(query: str, sources: list, limit: int, lang: str) -> dict:
     """Multi-source search with deduplication, reranking, and result cap."""
-    src_map  = _build_source_map()
+    src_map = _build_source_map()
+    # Auto-inject French sources when the query is French so callers don't need to know
+    if lang == "fr":
+        sources = list(dict.fromkeys(list(FR_SOURCES) + list(sources)))
     priority = [s for s in sources if s in (FR_SOURCES if lang == "fr" else EN_SOURCES)]
     rest     = [s for s in sources if s not in (FR_SOURCES if lang == "fr" else EN_SOURCES)]
     ordered  = priority + rest
