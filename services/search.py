@@ -2,6 +2,7 @@
 import re
 import time
 import json
+import datetime
 import urllib.parse
 import urllib.request
 import requests
@@ -590,8 +591,79 @@ def search_source(source: str, query: str, limit: int = 10, lang: str = "") -> l
     return fn(query, limit)
 
 
+# ── Post-retrieval pipeline: deduplication + reranking ───────────────────────
+
+def _normalize_title(title) -> str:
+    return re.sub(r'[^\w\s]', '', (title or '').lower()).strip()
+
+
+def _title_tokens(title) -> frozenset:
+    return frozenset(_normalize_title(title).split())
+
+
+def _jaccard(a: frozenset, b: frozenset) -> float:
+    if not a and not b:
+        return 1.0
+    union = a | b
+    return len(a & b) / len(union) if union else 0.0
+
+
+def _score(result: dict, query_lang: str) -> int:
+    score = 0
+    if (result.get('language') or '').lower() == query_lang:
+        score += 3
+    if result.get('doi'):
+        score += 2
+    if result.get('abstract'):
+        score += 2
+    year = result.get('year')
+    if year:
+        try:
+            if int(year) >= datetime.date.today().year - 5:
+                score += 1
+        except (ValueError, TypeError):
+            pass
+    if result.get('open_access') or result.get('is_oa'):
+        score += 1
+    return score
+
+
+def rerank(results: list, query_lang: str) -> list:
+    """Sort results by relevance score descending."""
+    return sorted(results, key=lambda r: _score(r, query_lang), reverse=True)
+
+
+def deduplicate(results: list) -> tuple[list, int]:
+    """Remove DOI duplicates and near-identical titles (Jaccard > 0.9).
+
+    Assumes results are pre-sorted by score so the first occurrence is the
+    highest-scored duplicate to keep.
+    Returns (deduplicated_list, n_removed).
+    """
+    seen_dois: set[str] = set()
+    seen_tokens: list[frozenset] = []
+    out: list[dict] = []
+
+    for r in results:
+        doi = (r.get('doi') or '').strip().lower()
+        if doi:
+            if doi in seen_dois:
+                continue
+            seen_dois.add(doi)
+
+        tokens = _title_tokens(r.get('title') or '')
+        if tokens:
+            if any(_jaccard(tokens, t) > 0.9 for t in seen_tokens):
+                continue
+            seen_tokens.append(tokens)
+
+        out.append(r)
+
+    return out, len(results) - len(out)
+
+
 def aggregate_search(query: str, sources: list, limit: int, lang: str) -> dict:
-    """Multi-source search with language-aware ordering and allocation."""
+    """Multi-source search with deduplication, reranking, and result cap."""
     src_map  = _build_source_map()
     priority = [s for s in sources if s in (FR_SOURCES if lang == "fr" else EN_SOURCES)]
     rest     = [s for s in sources if s not in (FR_SOURCES if lang == "fr" else EN_SOURCES)]
@@ -602,24 +674,24 @@ def aggregate_search(query: str, sources: list, limit: int, lang: str) -> dict:
     per_priority = max(limit // n_priority, 10)
     per_rest     = max(limit // (n_priority + n_rest) + 2, 6)
 
-    results = []
+    raw: list[dict] = []
     for src in ordered:
-        fn  = src_map.get(src)
+        fn = src_map.get(src)
         if not fn:
             continue
         per = per_priority if src in priority else per_rest
         if src in ("openalex", "doaj"):
-            results.extend(fn(query, per, lang=lang))
+            raw.extend(fn(query, per, lang=lang))
         else:
-            results.extend(fn(query, per))
+            raw.extend(fn(query, per))
 
-    def _lang_rank(r):
-        rl = (r.get("language") or "").lower()
-        if rl == lang:
-            return 0
-        if rl == "":
-            return 1
-        return 2
+    ranked              = rerank(raw, lang)
+    deduped, n_deduped  = deduplicate(ranked)
+    final               = deduped[:limit]
 
-    results.sort(key=_lang_rank)
-    return {"results": results[:max(limit, 100)], "detected_lang": lang}
+    return {
+        "results":         final,
+        "detected_lang":   lang,
+        "_deduped_count":  n_deduped,
+        "_reranked_count": len(final),
+    }
