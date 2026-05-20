@@ -669,6 +669,44 @@ textarea { resize: vertical; min-height: 80px; }
 /* Tab panels */
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
+/* ── Sidebar collapse ───────────────────────────────────────── */
+#sidebar {
+  transition: width 0.25s ease, opacity 0.25s ease;
+  overflow: hidden;
+}
+#sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Splitter bars ──────────────────────────────────────────── */
+.splitter {
+  width: 5px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.splitter:hover, .splitter.dragging { background: var(--accent); }
+
+/* ── Custom source input ────────────────────────────────────── */
+.source-custom { padding: 6px 0 2px; }
+.source-input {
+  width: 100%; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: var(--r);
+  font-family: 'Lora', serif; font-size: 0.88rem; margin-bottom: 6px;
+  background: #fff; color: var(--ink);
+}
+[data-theme="dark"] .source-input { background: var(--cream); }
+.source-divider { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+.source-checkbox-label {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+  color: var(--ink); cursor: pointer;
+}
+
 /* ── Login modal (above all other modals) ───────────────────── */
 .login-modal-bg {
   position: fixed; inset: 0;
@@ -712,6 +750,7 @@ textarea { resize: vertical; min-height: 80px; }
 
 <!-- ══ HEADER ═══════════════════════════════════════════════════ -->
 <header>
+  <button id="sidebar-toggle" class="hdr-btn" aria-label="Toggle navigation" title="Toggle navigation" style="font-size:1.05rem;padding:4px 9px;flex-shrink:0">&#9776;</button>
   <div class="logo">
     <div>
       Schol<span class="logo-dot">ara</span>
@@ -728,7 +767,7 @@ textarea { resize: vertical; min-height: 80px; }
 <div class="shell">
 
 <!-- ── SIDEBAR ──────────────────────────────────────────────── -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
 
   <div class="sidebar-section">
     <div class="tabs">
@@ -754,13 +793,15 @@ textarea { resize: vertical; min-height: 80px; }
           <label class="chk-label"><input type="checkbox" name="src" value="doaj" checked> 🔓 DOAJ</label>
           <label class="chk-label"><input type="checkbox" name="src" value="gutenberg" checked> 📚 Gutenberg</label>
           <label class="chk-label"><input type="checkbox" name="src" value="archive" checked> 🏛 Archive</label>
-        </div>
-        <fieldset style="border:1px solid var(--border); border-radius:6px; padding:8px; margin-top:8px;">
-          <legend style="font-family:var(--font-mono); font-size:0.75rem; padding:0 4px;">Francophone</legend>
+          <div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:5px;margin-top:3px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted);">Francophone</div>
           <label class="chk-label"><input type="checkbox" name="src" value="hal" checked> 🏛️ HAL</label>
           <label class="chk-label"><input type="checkbox" name="src" value="persee"> 📜 Persée</label>
           <label class="chk-label"><input type="checkbox" name="src" value="openedition"> 📖 OpenEdition</label>
           <label class="chk-label"><input type="checkbox" name="src" value="erudit"> 📚 Érudit</label>
+        </div>
+        <fieldset style="border:1px solid var(--border); border-radius:6px; padding:8px; margin-top:8px;">
+          <legend style="font-family:var(--font-mono); font-size:0.75rem; padding:0 4px;">Video</legend>
+          <label class="chk-label"><input type="checkbox" name="src" value="youtube"> ▶ YouTube</label>
         </fieldset>
         <fieldset id="gn-sources" style="display:none; border:1px solid var(--border); border-radius:6px; padding:8px; margin-top:8px;">
           <legend style="font-family:var(--font-mono); font-size:0.75rem; padding:0 4px;" data-i18n="gn_sources_label">Global North Sources</legend>
@@ -771,7 +812,22 @@ textarea { resize: vertical; min-height: 80px; }
           <label class="chk-label"><input type="checkbox" name="src" value="base"> 🌐 <span data-i18n="base_label">BASE</span></label>
         </fieldset>
       </div>
-      <button class="btn btn-primary btn-full" id="btnSearch">
+      <hr class="source-divider">
+      <div class="source-custom">
+        <label for="custom-journal">Custom journal / source</label>
+        <input id="custom-journal" type="text" placeholder="e.g. Journal of Applied Mathematics" autocomplete="off" list="journal-suggestions" class="source-input">
+        <datalist id="journal-suggestions">
+          <option value="Journal of Applied Mathematics">
+          <option value="African Journals Online (AJOL)">
+          <option value="PLOS ONE">
+          <option value="arXiv (math)">
+          <option value="SSRN">
+        </datalist>
+        <label class="source-checkbox-label">
+          <input type="checkbox" id="use-google-scholar"> Include Google Scholar
+        </label>
+      </div>
+      <button class="btn btn-primary btn-full" id="btnSearch" style="margin-top:10px">
         <span class="spin" id="searchSpin"></span>
         <span data-i18n="search_btn">Search</span>
       </button>
@@ -791,6 +847,9 @@ textarea { resize: vertical; min-height: 80px; }
           Terms of Service. I am solely responsible for compliance with applicable law.</span>
         </label>
       </div>
+      <button class="btn btn-secondary btn-full" id="btnPlay" style="display:none; margin-bottom:6px;">
+        ▶ Play video
+      </button>
       <button class="btn btn-primary btn-full" id="btnDownload">
         <span class="spin" id="dlSpin"></span>
         <span data-i18n="download_btn">Download</span>
@@ -883,8 +942,10 @@ textarea { resize: vertical; min-height: 80px; }
 
 </aside>
 
+<div class="splitter" role="separator" aria-orientation="vertical" tabindex="0"></div>
+
 <!-- ── MAIN ──────────────────────────────────────────────────── -->
-<main class="main">
+<main class="main" id="panel-main">
   <div class="results-bar">
     <span class="results-label" data-i18n="results_label">Results</span>
     <span class="results-count" id="resCount" style="display:none"></span>
@@ -898,8 +959,10 @@ textarea { resize: vertical; min-height: 80px; }
   </div>
 </main>
 
+<div class="splitter" role="separator" aria-orientation="vertical" tabindex="0"></div>
+
 <!-- ── VIEWER ────────────────────────────────────────────────── -->
-<aside class="viewer">
+<aside class="viewer" id="panel-viewer">
   <div class="viewer-toolbar">
     <span class="viewer-title" id="viewerTitle">No file open</span>
     <a id="viewerExtLink" href="#" target="_blank" rel="noopener noreferrer"
@@ -913,7 +976,8 @@ textarea { resize: vertical; min-height: 80px; }
     </div>
     <video  id="viewerVideo"  controls></video>
     <audio  id="viewerAudio"  controls></audio>
-    <iframe id="viewerIframe"></iframe>
+    <iframe id="viewerIframe" allowfullscreen
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
     <div    id="viewerText"></div>
   </div>
 </aside>

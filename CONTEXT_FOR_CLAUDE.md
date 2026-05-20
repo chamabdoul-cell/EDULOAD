@@ -96,6 +96,9 @@ adm_app/
 │   ├── rate_limit.py        # check(key, limit, window_secs), apply(request, user), reset()
 │   ├── convert.py           # do_convert() — 5-layer hardened: path, size, MIME, timeout, subprocess
 │   └── download.py          # enqueue_job(), get_download_dir(), load_jobs_from_db(), workers
+│                            # • appends .pdf when URL suffix isn't a known doc ext (arXiv IDs)
+│                            # • infers true ext from Content-Type + magic bytes (_infer_ext)
+│                            # • rejects HTML responses (login walls) with HTTP 422
 │
 ├── models/                  # Reserved for future SQLAlchemy ORM
 │
@@ -214,6 +217,13 @@ Every function in `repositories/` takes `db: sqlite3.Connection` as its first ar
 3. `deduplicate(results)` — DOI exact match + Jaccard > 0.9 on normalised title tokens
 4. Cap at `limit`
 5. Returns `(results, deduped_count, reranked_count)`
+
+**French detection** (`_detect_lang(text)`) uses a 3-tier cascade:
+1. Stopword match — ≥2 common French function words
+2. Content word match — any word in `_FR_CONTENT_WORDS` (academic/domain vocabulary like "changement", "africain", "développement")
+3. Accent frequency — >1.5% of non-space characters are accented (`[éèêëàâîïôùûüçœæ]`)
+
+When `lang == "fr"`, French sources (`FR_SOURCES`) are auto-injected at the front of the source list so callers don't need to request them explicitly.
 
 ### Demo Prompt Substitution
 `prompts/demo/*.txt` use `{text}`, `{language}`, `{message}` as placeholders. Substitution is done via `.replace()`, **not** `str.format()`, to avoid conflicts with JSON curly braces in `presentation.txt`.
@@ -336,7 +346,7 @@ Rate limits: extract 10/min, demo 20/min. Text cap: demo 12 000 chars, raw text 
 |--------|------|-------------|
 | GET | `/api/file/{filename}` | Serve download |
 | DELETE | `/api/file/{filename}` | Delete file |
-| POST | `/api/convert` | `{filename, to_fmt}` |
+| POST | `/api/convert` | `{filename, to_fmt}` — `format` is also accepted as an alias for `to_fmt` |
 
 ### History
 | Method | Path | Description |
@@ -405,12 +415,12 @@ docker-compose up --build
 | Phase 7 | `aa80d53` | Frontend modularisation — 7 ES modules + template |
 | Phase 8 | `a04fb47` | Institutional: shared collections, analytics, branding |
 | Demo | `065d57e` | Interactive Demo: extract, explain, summary, chat, presentation, flowchart |
+| Bug fixes | `3a98805` | arXiv extension fix, HTML rejection, French detection 3-tier, lifespan handler, convert alias |
 
 ---
 
 ## Known Limitations
 
-- **`app.py` startup uses deprecated `@app.on_event("startup")`** — FastAPI deprecation warning only; does not affect functionality. Migrate to `lifespan=` when convenient.
 - **Synchronous search + conversion**: all 14 search functions and `/api/convert` run synchronously in thread pool workers. Async migration is deferred.
 - **No download resume**: interrupted downloads must restart from the beginning.
 - **Mermaid.js from CDN**: the flowchart renderer loads Mermaid lazily from `cdnjs.cloudflare.com`. It is not cached by the service worker — requires internet for first flowchart request.

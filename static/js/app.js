@@ -2,7 +2,7 @@
 import { applyTranslations, setLang, currentLang } from './i18n.js';
 import { initAuth } from './auth.js';
 import { $ } from './api.js';
-import { loadStatus, renderQueuePanel } from './download.js';
+import { loadStatus, renderQueuePanel, openYouTubeViewer } from './download.js';
 import { initDownload } from './download.js';
 import { initSearch } from './search.js';
 import { loadHistory, loadCollections, initCollections } from './collections.js';
@@ -130,11 +130,53 @@ function applyBranding(branding) {
   }
 }
 
+// ── Sidebar toggle ────────────────────────────────────────────────
+function initSidebarToggle() {
+  const btn     = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  if (!btn || !sidebar) return;
+  btn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+  });
+}
+
+// ── Resizable splitters ───────────────────────────────────────────
+function initSplitters() {
+  document.querySelectorAll('.splitter').forEach(splitter => {
+    splitter.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const leftPanel  = splitter.previousElementSibling;
+      const rightPanel = splitter.nextElementSibling;
+      const startX     = e.clientX;
+      const leftStart  = leftPanel.getBoundingClientRect().width;
+      const rightStart = rightPanel.getBoundingClientRect().width;
+      splitter.classList.add('dragging');
+      const onMove = mv => {
+        const delta    = mv.clientX - startX;
+        const newLeft  = Math.max(120, leftStart  + delta);
+        const newRight = Math.max(160, rightStart - delta);
+        leftPanel.style.flex  = `0 0 ${newLeft}px`;
+        rightPanel.style.flex = `0 0 ${newRight}px`;
+      };
+      const onUp = () => {
+        splitter.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  });
+}
+
 // ── Bootstrap ─────────────────────────────────────────────────────
 window.autoOpenViewer = true;
+window.openYouTubeViewer = openYouTubeViewer;
 
 applyTranslations();
 initTabs();
+initSidebarToggle();
+initSplitters();
 async function checkAdminAccess() {
   try {
     const r = await apiFetch('/api/admin/users');

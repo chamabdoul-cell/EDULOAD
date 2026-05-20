@@ -580,6 +580,39 @@ def _search_base(query, limit=5):
 
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
+def _search_youtube(query: str, limit: int = 10) -> list[dict]:
+    try:
+        import yt_dlp
+        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info    = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+            results = []
+            for entry in (info.get("entries") or []):
+                vid_id = entry.get("id", "")
+                if not vid_id:
+                    continue
+                dur    = entry.get("duration")
+                d      = int(dur) if dur else 0
+                thumbs = entry.get("thumbnails") or []
+                thumb  = thumbs[-1].get("url", "") if thumbs else ""
+                results.append({
+                    "title":     entry.get("title", ""),
+                    "url":       f"https://www.youtube.com/watch?v={vid_id}",
+                    "video_id":  vid_id,
+                    "snippet":   (entry.get("description") or "")[:200],
+                    "source":    "YouTube",
+                    "icon":      "▶",
+                    "authors":   entry.get("uploader", "") or entry.get("channel", ""),
+                    "year":      None,
+                    "thumbnail": thumb,
+                    "duration":  f"{d//60}:{d%60:02d}" if d else "",
+                    "pdf_url":   "",
+                })
+            return results
+    except Exception:
+        return []
+
+
 def _build_source_map() -> dict:
     src_map = {
         "arxiv":            _search_arxiv,
@@ -592,6 +625,7 @@ def _build_source_map() -> dict:
         "persee":           _search_persee,
         "openedition":      _search_openedition,
         "erudit":           _search_erudit,
+        "youtube":          _search_youtube,
     }
     if AIConfig.is_north():
         src_map.update({

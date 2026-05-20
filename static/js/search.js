@@ -51,11 +51,12 @@ function renderResults() {
   }
 
   grid.innerHTML = filtered.map((r, i) => {
-    const openUrl = r.url || r.link || '';
-    const pdfUrl  = r.pdf_url || '';
-    const authors = Array.isArray(r.authors) ? r.authors.slice(0, 3).join(', ') : (r.authors || '');
-    const journal = Array.isArray(r.journal) ? (r.journal[0] || '') : (r.journal || '');
-    const byline  = [authors, r.year ? String(r.year) : '', journal ? `<em>${esc(journal)}</em>` : '', esc(r.source || '')]
+    const openUrl  = r.url || r.link || '';
+    const pdfUrl   = r.pdf_url || '';
+    const ytId     = r.video_id || '';
+    const authors  = Array.isArray(r.authors) ? r.authors.slice(0, 3).join(', ') : (r.authors || '');
+    const journal  = Array.isArray(r.journal) ? (r.journal[0] || '') : (r.journal || '');
+    const byline   = [authors, r.year ? String(r.year) : '', journal ? `<em>${esc(journal)}</em>` : '', esc(r.source || '')]
       .filter(Boolean).join(' · ');
     const snippet  = Array.isArray(r.snippet) ? (r.snippet[0] || '') : (r.snippet || '');
     const titleHtml = openUrl
@@ -63,12 +64,28 @@ function renderResults() {
       : pdfUrl
         ? `<a class="result-title-link" href="${esc(pdfUrl)}" target="_blank" rel="noopener noreferrer">${esc(r.title || '—')}</a>`
         : `<span class="result-title-plain">${esc(r.title || '—')}</span>`;
+    const thumbHtml = ytId && r.thumbnail
+      ? `<div style="position:relative;margin-bottom:6px;cursor:pointer" data-action="yt-play" data-vid="${esc(ytId)}">
+           <img src="${esc(r.thumbnail)}" alt="" style="width:100%;border-radius:4px;display:block;max-height:140px;object-fit:cover">
+           ${r.duration ? `<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.75);color:#fff;font-size:0.68rem;padding:1px 5px;border-radius:3px">${esc(r.duration)}</span>` : ''}
+           <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;opacity:.85;pointer-events:none">▶</span>
+         </div>`
+      : '';
+    const actionHtml = ytId
+      ? `<div style="display:flex;gap:6px;margin-top:6px">
+           <button class="card-btn" data-action="yt-play" data-vid="${esc(ytId)}">▶ Play</button>
+           <button class="card-btn dl" data-action="yt-download" data-url="${esc(openUrl)}">⬇ Download</button>
+         </div>`
+      : pdfUrl
+        ? `<button class="card-btn dl" style="margin-top:6px" data-action="quick-download" data-url="${esc(pdfUrl)}">⬇ Download PDF</button>`
+        : '';
     return `
     <div class="result-item" style="animation:fadeIn 0.12s ${i*0.02}s both">
+      ${thumbHtml}
       <div class="result-title">${titleHtml}</div>
       ${byline  ? `<div class="result-byline">${byline}</div>` : ''}
       ${snippet ? `<div class="card-snippet">${esc(snippet)}</div>` : ''}
-      ${pdfUrl  ? `<button class="card-btn dl" style="margin-top:6px" data-action="quick-download" data-url="${esc(pdfUrl)}">⬇ Download PDF</button>` : ''}
+      ${actionHtml}
     </div>`;
   }).join('');
 }
@@ -95,12 +112,17 @@ export function initSearch() {
       const extra = FR_SOURCES_EXTRA.filter(s => !sources.includes(s));
       sources = [...sources, ...extra];
     }
+    const customJournal    = document.getElementById('custom-journal')?.value.trim() ?? '';
+    const useGoogleScholar = document.getElementById('use-google-scholar')?.checked ?? false;
+    let effectiveQuery = text;
+    if (customJournal)    effectiveQuery += ` journal:"${customJournal}"`;
+    if (useGoogleScholar) effectiveQuery += ' site:scholar.google.com';
     $('searchSpin').classList.add('active');
     $('btnSearch').disabled = true;
     try {
       const r = await apiFetch('/api/search', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({query: text, sources, limit: 50, lang})
+        body: JSON.stringify({query: effectiveQuery, sources, limit: 50, lang})
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
@@ -120,10 +142,19 @@ export function initSearch() {
     }
   });
 
-  // Event delegation for quick-download buttons in results
+  // Event delegation for result card actions
   $('resultsGrid').addEventListener('click', e => {
-    const btn = e.target.closest('[data-action="quick-download"]');
-    if (btn) quickDownload(btn.dataset.url);
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const { action, url, vid } = btn.dataset;
+    if (action === 'quick-download') quickDownload(url);
+    if (action === 'yt-play' && vid) window.openYouTubeViewer?.(vid);
+    if (action === 'yt-download' && url) {
+      const inp = $('urlInput');
+      inp.value = url;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('[data-tab="url"]')?.click();
+    }
   });
 
   // Quick download modal

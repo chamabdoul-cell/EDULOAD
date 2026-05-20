@@ -159,6 +159,36 @@ export async function loadStatus() {
   } catch(e) {}
 }
 
+// ── YouTube helpers ───────────────────────────────────────────────
+function ytVideoId(url) {
+  try {
+    const u    = new URL(url);
+    const host = u.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') return u.pathname.slice(1).split('?')[0];
+    if (host.includes('youtube.com')) {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      const m = u.pathname.match(/\/(?:embed|shorts|v)\/([^/?]+)/);
+      if (m) return m[1];
+    }
+  } catch(_) {}
+  return null;
+}
+
+export function openYouTubeViewer(videoId) {
+  _clearPdfObject();
+  $('viewerVideo').pause?.();
+  $('viewerAudio').pause?.();
+  $('viewerVideo').style.display = $('viewerAudio').style.display =
+  $('viewerText').style.display  = 'none';
+  $('viewerPlaceholder').style.display = 'none';
+  const f = $('viewerIframe');
+  f.src = `https://www.youtube.com/embed/${videoId}`;
+  f.style.display = 'block';
+  $('viewerTitle').textContent = 'YouTube';
+  $('viewerExtLink').href = `https://www.youtube.com/watch?v=${videoId}`;
+  $('viewerExtLink').style.display = 'inline-flex';
+}
+
 // ── Subtitle helper ───────────────────────────────────────────────
 function srtToVtt(srt) {
   return 'WEBVTT\n\n' + srt
@@ -254,11 +284,22 @@ export function initDownload() {
     $('viewerVideo').pause?.(); $('viewerAudio').pause?.();
     $('viewerVideo').style.display = $('viewerAudio').style.display =
     $('viewerIframe').style.display = $('viewerText').style.display = 'none';
+    $('viewerIframe').src = 'about:blank';
     _clearPdfObject();
     $('viewerExtLink').style.display = 'none';
     $('viewerPlaceholder').style.display = 'flex';
     $('viewerPlaceholder').innerHTML = `<div class="vp-icon">🔬</div><p>${t('viewer_placeholder')}</p>`;
     $('viewerTitle').textContent = t('viewer_no_file');
+  });
+
+  // Show/hide Play button when URL input changes
+  $('urlInput').addEventListener('input', () => {
+    const vid = ytVideoId($('urlInput').value.trim());
+    $('btnPlay').style.display = vid ? '' : 'none';
+  });
+  $('btnPlay').addEventListener('click', () => {
+    const vid = ytVideoId($('urlInput').value.trim());
+    if (vid) openYouTubeViewer(vid);
   });
 
   // URL download

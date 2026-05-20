@@ -1,4 +1,5 @@
 """Download queue service — job state, workers, URL validation, directory helper."""
+import re as _re
 import threading
 import urllib.parse
 import urllib.request
@@ -41,6 +42,59 @@ def _is_html_content(dest_path: Path) -> bool:
     except Exception:
         return False
 
+
+def _find_pdf_url_in_html(html_bytes: bytes, original_url: str) -> str | None:
+    """Extract a direct PDF download URL from an HTML landing page.
+
+    Handles source-specific rewrites first (arXiv, bioRxiv, medRxiv), then
+    falls back to scanning all href attributes for PDF candidates.
+    Returns None when no usable URL is found.
+    """
+    # ── Source-specific URL rewrites ─────────────────────────────────
+    # arXiv abstract page → PDF: .../abs/ID  →  .../pdf/ID
+    m = _re.search(r'arxiv\.org/abs/([^\s"\'?#>]+)', original_url, _re.I)
+    if m:
+        return f"https://arxiv.org/pdf/{m.group(1)}"
+
+    # bioRxiv / medRxiv: append .full.pdf when not already a PDF
+    if any(d in original_url for d in ("biorxiv.org", "medrxiv.org")):
+        if not original_url.lower().endswith(".pdf"):
+            return original_url.rstrip("/") + ".full.pdf"
+
+    # ── Generic: parse href attributes ───────────────────────────────
+    try:
+        text = html_bytes[:300_000].decode("utf-8", errors="replace")
+        base_p = urllib.parse.urlparse(original_url)
+        origin = f"{base_p.scheme}://{base_p.netloc}"
+
+        def _abs(href: str) -> str | None:
+            h = href.strip()
+            if not h or h.startswith(("#", "javascript:", "mailto:")):
+                return None
+            if h.startswith("http"):    return h
+            if h.startswith("//"):      return base_p.scheme + ":" + h
+            if h.startswith("/"):       return origin + h
+            return None
+
+        hrefs = _re.findall(r'href=["\']([^"\']{4,300})["\']', text, _re.I)
+
+        # Three passes, most-specific first
+        for predicate in (
+            lambda h: ".pdf" in h.lower(),
+            lambda h: "/pdf/" in h.lower(),
+            lambda h: "download" in h.lower() and "pdf" in h.lower(),
+        ):
+            for raw in hrefs:
+                if not predicate(raw):
+                    continue
+                cand = _abs(raw)
+                if cand and is_allowed_url(cand):
+                    return cand
+    except Exception:
+        pass
+
+    return None
+
 from config.settings import AIConfig
 from db import get_db
 import repositories.history as history_repo
@@ -65,7 +119,10 @@ ALLOWED_DOWNLOAD_DOMAINS = [
     "europepmc.org", "zenodo.org", "figshare.com", "osf.io",
     "frontiersin.org", "mdpi.com", "peerj.com", "hindawi.com",
     "intechopen.com", "f1000research.com",
+    "youtube.com", "youtu.be",
 ]
+
+_YTDLP_DOMAINS = {"youtube.com", "youtu.be"}
 
 GLOBAL_NORTH_DOMAINS = {
     "semanticscholar.org", "api.semanticscholar.org",
@@ -131,6 +188,43 @@ def enqueue_job(url: str, meta: dict | None = None) -> str:
     return job_id
 
 
+def _ytdlp_download(job: dict, job_id: str, url: str, dl_dir: Path) -> str:
+    """Download via yt-dlp (YouTube etc). Returns saved filename."""
+    import yt_dlp
+    result: dict = {}
+
+    def _hook(d: dict):
+        if d["status"] == "downloading":
+            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            done  = d.get("downloaded_bytes", 0)
+            pct   = round(done / total * 100, 1) if total else 0
+            job["progress"] = pct
+            job["speed"]    = d.get("_speed_str", "").strip()
+            job["eta"]      = d.get("_eta_str", "").strip()
+            _db_update_job(job_id, progress=pct)
+        elif d["status"] == "finished":
+            result["filepath"] = d.get("filename", "")
+
+    ydl_opts = {
+        "outtmpl":             str(dl_dir / "%(title)s.%(ext)s"),
+        "progress_hooks":      [_hook],
+        "quiet":               True,
+        "no_warnings":         True,
+        "format":              "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "merge_output_format": "mp4",
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        if not result.get("filepath"):
+            result["filepath"] = ydl.prepare_filename(info)
+
+    fp = Path(result["filepath"])
+    if not fp.exists():
+        candidates = list(dl_dir.glob(fp.stem + ".*"))
+        fp = candidates[0] if candidates else fp
+    return fp.name
+
+
 def _run_download_job(job_id: str, req_data: dict):
     job    = download_jobs[job_id]
     job["status"] = "running"
@@ -143,6 +237,37 @@ def _run_download_job(job_id: str, req_data: dict):
         job["status"] = "error"
         job["error"]  = "URL not from an allowed open-access source."
         _db_update_job(job_id, status="error", error=job["error"])
+        return
+
+    # Route YouTube URLs through yt-dlp
+    try:
+        _host = urllib.parse.urlparse(url).netloc.lower().lstrip("www.")
+    except Exception:
+        _host = ""
+    if any(_host == d or _host.endswith("." + d) for d in _YTDLP_DOMAINS):
+        job["method"] = "ytdlp"
+        try:
+            filename = _ytdlp_download(job, job_id, url, dl_dir)
+            job["status"] = "done"; job["progress"] = 100; job["file"] = filename
+            _db_update_job(job_id, status="done", progress=100, filename=filename)
+            dest = dl_dir / filename
+            size_kb = int(dest.stat().st_size / 1024) if dest.exists() else 0
+            meta = dict(req_data.get("meta", {}))
+            try:
+                db = get_db()
+                history_repo.add_history_entry(
+                    db, url, meta.get("title") or filename,
+                    urllib.parse.urlparse(url).netloc or "YouTube",
+                    filename, size_kb,
+                    authors=meta.get("authors"), year=meta.get("year"),
+                    journal=meta.get("journal"), language=meta.get("language"),
+                )
+                db.close()
+            except Exception:
+                pass
+        except Exception as e:
+            job["status"] = "error"; job["error"] = str(e)
+            _db_update_job(job_id, status="error", error=str(e))
         return
 
     try:
@@ -173,13 +298,46 @@ def _run_download_job(job_id: str, req_data: dict):
                         job["progress"] = pct
                         _db_update_job(job_id, progress=pct)
 
-        # Reject HTML responses (login walls, error pages)
+        # Reject HTML responses — but first try to extract a direct PDF link
         if _is_html_content(dest_path):
+            html_bytes = dest_path.read_bytes()
             dest_path.unlink(missing_ok=True)
-            job["status"] = "error"
-            job["error"]  = "Server returned an HTML page — the resource may require login or is not directly downloadable."
-            _db_update_job(job_id, status="error", error=job["error"])
-            return
+            fallback = _find_pdf_url_in_html(html_bytes, url)
+            if fallback and fallback != url:
+                # One retry with the resolved URL
+                try:
+                    req3 = urllib.request.Request(fallback, headers=headers)
+                    with urllib.request.urlopen(req3, timeout=60) as resp2:
+                        resp_ctype = resp2.headers.get("Content-Type", "")
+                        total      = int(resp2.headers.get("Content-Length", 0))
+                        downloaded = 0
+                        with open(dest_path, "wb") as f:
+                            while True:
+                                chunk = resp2.read(65536)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total:
+                                    pct = round(downloaded / total * 100, 1)
+                                    job["progress"] = pct
+                                    _db_update_job(job_id, progress=pct)
+                except Exception as retry_e:
+                    job["status"] = "error"
+                    job["error"]  = f"Could not follow landing page to PDF: {retry_e}"
+                    _db_update_job(job_id, status="error", error=job["error"])
+                    return
+                if _is_html_content(dest_path):
+                    dest_path.unlink(missing_ok=True)
+                    job["status"] = "error"
+                    job["error"]  = "Server returned an HTML page — the resource may require login or is not directly downloadable."
+                    _db_update_job(job_id, status="error", error=job["error"])
+                    return
+            else:
+                job["status"] = "error"
+                job["error"]  = "Server returned an HTML page — the resource may require login or is not directly downloadable."
+                _db_update_job(job_id, status="error", error=job["error"])
+                return
 
         # Rename to correct extension if needed
         correct_ext = _infer_ext(resp_ctype, dest_path)
