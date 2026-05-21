@@ -34,6 +34,40 @@ export function showMsg(el, type, text) {
   if (type !== 'err') setTimeout(() => { el.className='msg'; el.textContent=''; }, 5000);
 }
 
+// ── Persistent notification tray ──────────────────────────────────
+export function notify(message, type = 'info') {
+  const tray = document.getElementById('notification-tray');
+  if (!tray) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast toast--' + type;
+
+  const text = document.createElement('span');
+  text.className = 'toast__text';
+  text.textContent = message;
+
+  const close = document.createElement('button');
+  close.className = 'toast__close';
+  close.textContent = '✕';
+  close.addEventListener('click', () => toast.remove());
+
+  const bar = document.createElement('div');
+  bar.className = 'toast__progress';
+
+  toast.appendChild(text);
+  toast.appendChild(close);
+  toast.appendChild(bar);
+  tray.appendChild(toast);
+
+  // Auto-dismiss after 6 s unless hovered
+  let timer = setTimeout(() => toast.remove(), 6000);
+  toast.addEventListener('mouseenter', () => clearTimeout(timer));
+  toast.addEventListener('mouseleave', () => { timer = setTimeout(() => toast.remove(), 2000); });
+
+  // Keep max 5 toasts visible
+  while (tray.children.length > 5) tray.firstElementChild.remove();
+}
+
 // ── Token refresh ─────────────────────────────────────────────────
 async function _refreshToken() {
   const rt = getRefreshToken();

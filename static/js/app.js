@@ -7,6 +7,7 @@ import { initDownload } from './download.js';
 import { initSearch } from './search.js';
 import { loadHistory, loadCollections, initCollections } from './collections.js';
 import { initDemo } from './demo.js';
+import { initViewer } from './viewer.js';
 
 // Inject fadeIn keyframe animation
 const _st = document.createElement('style');
@@ -63,6 +64,7 @@ function initSettings() {
   $('settingDarkMode').addEventListener('change', e => {
     if (e.target.checked) document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('theme', e.target.checked ? 'dark' : 'light');
     saveSetting('dark_mode', String(e.target.checked));
   });
 }
@@ -169,14 +171,56 @@ function initSplitters() {
   });
 }
 
+// ── Dark mode — OS preference + explicit override (3.1) ───────────
+function initDarkMode() {
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved === 'dark' || (!saved && prefersDark)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const chk = $('settingDarkMode');
+    if (chk) chk.checked = true;
+  }
+  // Keep in sync if OS changes (and no explicit override set)
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (localStorage.getItem('theme')) return; // respect explicit choice
+    if (e.matches) document.documentElement.setAttribute('data-theme', 'dark');
+    else           document.documentElement.removeAttribute('data-theme');
+  });
+}
+
+// ── Mobile responsive init (1.2) ──────────────────────────────────
+function initMobileLayout() {
+  const mq = window.matchMedia('(max-width: 768px)');
+  const sidebar = document.getElementById('sidebar');
+
+  function _applyMobile(isMobile) {
+    if (!sidebar) return;
+    if (isMobile) {
+      sidebar.classList.add('collapsed');
+    }
+    // On orientation change, recalculate — panels use flex so they auto-reflow
+  }
+
+  _applyMobile(mq.matches);
+  mq.addEventListener('change', e => _applyMobile(e.matches));
+  window.addEventListener('orientationchange', () => {
+    // Allow a frame for the browser to update dimensions
+    requestAnimationFrame(() => {
+      if (mq.matches && sidebar) sidebar.classList.add('collapsed');
+    });
+  });
+}
+
 // ── Bootstrap ─────────────────────────────────────────────────────
 window.autoOpenViewer = true;
 window.openYouTubeViewer = openYouTubeViewer;
 
+initDarkMode();
 applyTranslations();
 initTabs();
 initSidebarToggle();
 initSplitters();
+initMobileLayout();
 async function checkAdminAccess() {
   try {
     const r = await apiFetch('/api/admin/users');
@@ -196,6 +240,7 @@ initSearch();
 initCollections();
 initDemo();
 initSettings();
+initViewer();
 loadStatus().then(s => { if (s && s.institution_branding) applyBranding(s.institution_branding); });
 loadSettings();
 setInterval(loadStatus, 15000);

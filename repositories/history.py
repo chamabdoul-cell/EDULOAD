@@ -39,6 +39,24 @@ def get_entry(db: sqlite3.Connection, id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def add_history_entry_metadata_only(
+    db: sqlite3.Connection, url: str, title: str, source: str,
+    authors=None, year=None, journal=None, language=None
+) -> int | None:
+    """Insert a bookmarked-but-not-downloaded entry (filename=NULL, size_kb=0)."""
+    try:
+        authors_str = json.dumps(authors) if authors else None
+        cur = db.execute(
+            """INSERT INTO history (url,title,source,filename,size_kb,authors,year,journal,language)
+               VALUES (?,?,?,NULL,0,?,?,?,?)""",
+            (url, title or url, source, authors_str, year, journal, language),
+        )
+        db.commit()
+        return cur.lastrowid
+    except Exception:
+        return None
+
+
 def top_sources(db: sqlite3.Connection, limit: int = 5) -> list:
     rows = db.execute(
         """SELECT source, COUNT(*) AS n FROM history

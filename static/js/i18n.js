@@ -74,6 +74,43 @@ export const TRANSLATIONS = {
     login_error_invalid: "Invalid email or password.",
     login_error_network: "Network error — try again.",
     session_expired:     "Session expired. Please sign in again.",
+    open_btn:            "Open",
+    download_pdf_btn:    "⬇ Download PDF",
+    ctx_open:            "Open in app",
+    ctx_download:        "Download",
+    ctx_copy:            "Copy link",
+    // Admin
+    admin_tab:                "📊 Admin",
+    admin_analytics_title:    "Impact Analytics",
+    coll_share_label:         "Share with institution",
+    // 1.1 AI Demo
+    ai_action_btn:      "AI",
+    fab_analyse:        "Analyse",
+    // 2.1 File list controls
+    filter_files_placeholder: "Filter files…",
+    sort_label:         "Sort",
+    sort_name_az:       "Name (A–Z)",
+    sort_name_za:       "Name (Z–A)",
+    sort_newest:        "Newest first",
+    sort_oldest:        "Oldest first",
+    sort_largest:       "Largest first",
+    sort_smallest:      "Smallest first",
+    // 2.2 Truncation warning
+    truncation_warning: "Only the first portion of this document was analysed.",
+    // 2.4 Citation preview
+    cite_modal_title:   "Export Citation",
+    copy_btn:           "Copy",
+    copied_feedback:    "Copied!",
+    dl_bib:             "Download .bib",
+    dl_ris:             "Download .ris",
+    // 2.5 Save to collection
+    save_to_collection: "+ Collection",
+    // 3.3 Search history
+    recent_searches:    "Recent searches",
+    clear_recent:       "Clear",
+    // 3.5 Convert in viewer
+    convert_in_viewer:  "Convert",
+    convert_tip:        "Tip: you can also convert files directly from the viewer toolbar.",
   },
   fr: {
     tagline:             "Le Savoir Ouvert, Partout",
@@ -149,6 +186,43 @@ export const TRANSLATIONS = {
     login_error_invalid: "E-mail ou mot de passe invalide.",
     login_error_network: "Erreur réseau — réessayez.",
     session_expired:     "Session expirée. Veuillez vous reconnecter.",
+    open_btn:            "Ouvrir",
+    download_pdf_btn:    "⬇ Télécharger PDF",
+    ctx_open:            "Ouvrir dans l'appli",
+    ctx_download:        "Télécharger",
+    ctx_copy:            "Copier le lien",
+    // Admin
+    admin_tab:                "📊 Admin",
+    admin_analytics_title:    "Analytique d'impact",
+    coll_share_label:         "Partager avec l'institution",
+    // 1.1 AI Demo
+    ai_action_btn:      "IA",
+    fab_analyse:        "Analyser",
+    // 2.1 File list controls
+    filter_files_placeholder: "Filtrer les fichiers…",
+    sort_label:         "Trier",
+    sort_name_az:       "Nom (A–Z)",
+    sort_name_za:       "Nom (Z–A)",
+    sort_newest:        "Plus récents",
+    sort_oldest:        "Plus anciens",
+    sort_largest:       "Plus grands",
+    sort_smallest:      "Plus petits",
+    // 2.2 Truncation warning
+    truncation_warning: "Seule la première partie de ce document a été analysée.",
+    // 2.4 Citation preview
+    cite_modal_title:   "Exporter la citation",
+    copy_btn:           "Copier",
+    copied_feedback:    "Copié !",
+    dl_bib:             "Télécharger .bib",
+    dl_ris:             "Télécharger .ris",
+    // 2.5 Save to collection
+    save_to_collection: "+ Collection",
+    // 3.3 Search history
+    recent_searches:    "Recherches récentes",
+    clear_recent:       "Effacer",
+    // 3.5 Convert in viewer
+    convert_in_viewer:  "Convertir",
+    convert_tip:        "Astuce : vous pouvez aussi convertir depuis la barre d'outils du visualiseur.",
   }
 };
 

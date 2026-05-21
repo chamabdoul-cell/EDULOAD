@@ -1,6 +1,6 @@
 // ── Collections and history UI ────────────────────────────────────
 import { t } from './i18n.js';
-import { apiFetch, $, esc, showMsg } from './api.js';
+import { apiFetch, $, esc, showMsg, notify } from './api.js';
 import { openViewer, currentFiles } from './download.js';
 
 // ── History ───────────────────────────────────────────────────────
@@ -15,16 +15,19 @@ function renderHistory(items) {
     return;
   }
   el.innerHTML = items.map(h => {
-    const date      = (h.ts || '').slice(0, 10);
-    const size      = h.size_kb ? `${h.size_kb} KB` : '';
-    const fileExists = currentFiles.some(f => f.name === h.filename);
-    return `<div class="hist-item" data-action="view-history" data-filename="${esc(h.filename)}" data-filetype="${esc((h.filename||'').split('.').pop().toLowerCase())}" data-exists="${fileExists}">
-      <div class="hist-title" title="${esc(h.title||h.filename)}">${esc(h.title||h.filename||'—')}</div>
+    const date       = (h.ts || '').slice(0, 10);
+    const size       = h.size_kb ? `${h.size_kb} KB` : '';
+    const metaOnly   = !h.filename || h.size_kb === 0;
+    const fileExists = !metaOnly && currentFiles.some(f => f.name === h.filename);
+    const icon       = metaOnly ? '🔖' : '';
+    return `<div class="hist-item" data-action="view-history" data-filename="${esc(h.filename||'')}" data-filetype="${esc((h.filename||'').split('.').pop().toLowerCase())}" data-exists="${fileExists}" data-meta-only="${metaOnly}">
+      <div class="hist-title" title="${esc(h.title||h.filename)}">${icon ? icon+' ' : ''}${esc(h.title||h.filename||'—')}</div>
       <div class="hist-meta">
         <span class="hist-source">${esc(h.source||'')}</span>
         <span>${date}</span>
         ${size ? `<span>${size}</span>` : ''}
-        ${!fileExists ? `<span style="color:#c0614a">${t('file_missing')}</span>` : ''}
+        ${!metaOnly && !fileExists ? `<span style="color:#c0614a">${t('file_missing')}</span>` : ''}
+        ${metaOnly ? `<span style="color:var(--teal)">bookmarked</span>` : ''}
       </div>
       ${h.tags ? `<div class="hist-tags"># ${esc(h.tags)}</div>` : ''}
       <div class="hist-actions">
@@ -97,6 +100,7 @@ export function initCollections() {
     e.stopPropagation();
     const { action, id, filename, exists } = btn.dataset;
     if (action === 'view-history') {
+      if (btn.dataset.metaOnly === 'true') return; // bookmarked only, no file
       if (!filename) return;
       if (exists === 'true') { const ext = filename.split('.').pop().toLowerCase(); openViewer(filename, ext); }
       else if (confirm('File is missing. Switch to URL tab to re-download?')) document.querySelector('[data-tab="url"]').click();
@@ -156,12 +160,22 @@ export function initCollections() {
     const historyId = $('addToCollHistoryId').value;
     if (!collId) return showMsg($('addToCollMsg'), 'err', t('add_to_coll_missing'));
     try {
+      let body;
+      if (historyId) {
+        body = { history_id: parseInt(historyId) };
+      } else {
+        // Metadata path (2.5): read from hidden field written by showSaveToCollection
+        const metaEl = document.getElementById('addToCollPendingMeta');
+        const meta   = metaEl ? JSON.parse(metaEl.value || '{}') : {};
+        body = { ...meta };
+      }
       const r = await apiFetch(`/api/collections/${collId}/items`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({history_id: parseInt(historyId)})
+        body: JSON.stringify(body)
       });
-      if (!r.ok) throw new Error('failed');
+      if (!r.ok) throw new Error((await r.json()).detail || 'failed');
       $('addToCollModalBg').classList.remove('open');
+      notify('Saved to collection', 'success');
     } catch(e) { showMsg($('addToCollMsg'), 'err', e.message); }
   });
 }

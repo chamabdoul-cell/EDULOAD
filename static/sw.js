@@ -1,9 +1,10 @@
-const CACHE = 'scholara-v4';
+const CACHE = 'scholara-v5';
 const SHELL = [
   '/', '/static/index.html', '/static/manifest.json',
   '/static/js/app.js', '/static/js/i18n.js', '/static/js/auth.js',
   '/static/js/api.js', '/static/js/download.js', '/static/js/search.js',
   '/static/js/collections.js', '/static/js/demo.js',
+  '/static/js/viewer.js', '/static/js/vendor/mermaid.min.js',
 ];
 
 self.addEventListener('install', e => {
@@ -25,8 +26,6 @@ self.addEventListener('fetch', e => {
 
   // Never intercept API calls — always go to network
   if (url.pathname.startsWith('/api/')) return;
-  // Mermaid CDN — never cache (large external resource)
-  if (url.hostname.includes('cloudflare.com')) return;
 
   // Cache-first for static shell, network-first for everything else
   if (e.request.method !== 'GET') return;

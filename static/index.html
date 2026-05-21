@@ -13,6 +13,13 @@
 <meta name="apple-mobile-web-app-title" content="Scholara">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var t=localStorage.getItem('theme');
+  if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))
+    document.documentElement.setAttribute('data-theme','dark');
+})();
+</script>
 <style>
 :root {
   --ink:    #0f0e0a;
@@ -707,6 +714,86 @@ textarea { resize: vertical; min-height: 80px; }
   color: var(--ink); cursor: pointer;
 }
 
+/* ── Link viewer overlay ────────────────────────────────────── */
+#linkViewerPanel {
+  position: fixed; inset: 0;
+  background: var(--paper);
+  display: none;
+  flex-direction: column;
+  z-index: 150;
+}
+.lv-toolbar {
+  height: 46px;
+  background: var(--panel);
+  border-bottom: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+.lv-nav-btn {
+  background: none;
+  border: 1px solid #3a3628;
+  border-radius: 4px;
+  color: #d0c8b4;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  transition: border-color 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.lv-nav-btn:hover { border-color: var(--accent); color: #fff; }
+.lv-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--warm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  flex-shrink: 0;
+}
+#linkViewerUrlBar {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  padding: 5px 10px;
+  border: 1px solid #3a3628;
+  border-radius: 4px;
+  background: #222018;
+  color: #d0c8b4;
+  min-width: 0;
+}
+#linkViewerUrlBar:focus { outline: none; border-color: var(--accent); }
+#linkViewerFrame { flex: 1; border: none; width: 100%; }
+
+/* ── Link context menu ───────────────────────────────────────── */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,.35);
+  min-width: 160px;
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  padding: 7px 16px;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover { background: var(--cream); color: var(--accent); }
+
 /* ── Login modal (above all other modals) ───────────────────── */
 .login-modal-bg {
   position: fixed; inset: 0;
@@ -743,6 +830,158 @@ textarea { resize: vertical; min-height: 80px; }
   color: var(--accent);
   letter-spacing: -0.02em;
   margin-bottom: 4px;
+}
+
+/* ── Notification toasts ─────────────────────────────────────── */
+#notification-tray {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  width: 300px;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  background: var(--panel);
+  color: #f0ebe0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  pointer-events: all;
+  animation: fadeIn 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.toast--success { border-left: 3px solid #3d9b6a; }
+.toast--error   { border-left: 3px solid var(--accent); }
+.toast--info    { border-left: 3px solid var(--teal); }
+.toast-msg      { flex: 1; }
+.toast-close {
+  background: none; border: none;
+  color: #8a8070; cursor: pointer;
+  font-size: 0.9rem; line-height: 1; flex-shrink: 0;
+}
+.toast-close:hover { color: #fff; }
+.toast-progress {
+  position: absolute; bottom: 0; left: 0;
+  height: 2px; background: rgba(255,255,255,0.3); width: 100%;
+  transform-origin: left;
+}
+
+/* ── Splitter touch widening ─────────────────────────────────── */
+.splitter { position: relative; }
+.splitter::before {
+  content: ''; position: absolute;
+  inset: 0 -8px; cursor: col-resize;
+}
+
+/* ── Citation modal ──────────────────────────────────────────── */
+.cite-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.cite-tab {
+  padding: 5px 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: transparent; color: var(--muted);
+  cursor: pointer; transition: all 0.12s;
+}
+.cite-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+#citeContent {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  background: var(--cream); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 12px;
+  min-height: 120px; max-height: 300px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+  color: var(--ink); line-height: 1.5; margin: 0;
+}
+
+/* ── AI FAB ──────────────────────────────────────────────────── */
+#ai-fab {
+  position: fixed; z-index: 500;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 20px;
+  padding: 5px 12px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.72rem; font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  display: none; white-space: nowrap;
+}
+
+/* ── AI bottom sheet (mobile) ────────────────────────────────── */
+#ai-bottom-sheet-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 590; display: none;
+}
+#ai-bottom-sheet-overlay.open { display: block; }
+#ai-bottom-sheet {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 600;
+  background: var(--paper);
+  border-top: 2px solid var(--accent);
+  border-radius: 14px 14px 0 0;
+  padding: 16px;
+  display: none; flex-direction: column; gap: 10px;
+  max-height: 60vh; overflow-y: auto;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+#ai-bottom-sheet.open { display: flex; transform: translateY(0); }
+.demo-sheet-action {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--cream); cursor: pointer; font-size: 0.9rem; font-family: inherit;
+}
+.demo-sheet-action:hover { border-color: var(--accent); }
+
+/* ── Mobile viewer overlay ───────────────────────────────────── */
+#mobile-viewer-overlay {
+  position: fixed; inset: 58px 0 0 0;
+  background: var(--paper); z-index: 90;
+  display: none; flex-direction: column;
+}
+#mobile-viewer-overlay.open { display: flex; }
+.mv-toolbar {
+  height: 46px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 14px; gap: 10px; flex-shrink: 0;
+  background: var(--cream);
+}
+.mv-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+/* ── Responsive breakpoints ──────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed; top: 58px; left: 0;
+    height: calc(100vh - 58px);
+    z-index: 80;
+    box-shadow: 4px 0 16px rgba(0,0,0,0.12);
+  }
+  .sidebar.collapsed { width: 0 !important; }
+  .splitter          { display: none; }
+  .viewer            { display: none; }
+  .main              { width: 100%; }
+  #notification-tray { width: calc(100vw - 32px); right: 16px; bottom: 16px; }
+}
+@media (max-width: 480px) {
+  header      { padding: 0 12px; gap: 8px; }
+  .logo       { font-size: 1.15rem; }
+  .logo-sub   { display: none; }
+  .hdr-tools  { gap: 3px; }
+  .tool-badge { font-size: 0.58rem; padding: 2px 5px; }
+  .hdr-btn    { font-size: 0.58rem; padding: 3px 7px; }
+  .results-grid { padding: 4px 8px 8px; }
 }
 </style>
 </head>
@@ -784,6 +1023,13 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="field">
         <label data-i18n="search_label">Describe what you need</label>
         <textarea id="nlInput" data-i18n-placeholder="search_placeholder" placeholder="e.g. research paper on transformers, or classic French novel…"></textarea>
+      </div>
+      <div id="recentSearches" style="display:none;margin-bottom:8px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span data-i18n="recent_searches">Recent</span>
+          <button id="btnClearRecent" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.65rem;padding:0" data-i18n="clear_recent">Clear</button>
+        </div>
+        <div id="recentList" style="display:flex;flex-wrap:wrap;gap:4px"></div>
       </div>
       <div class="field">
         <label data-i18n="sources_label">Sources</label>
@@ -868,6 +1114,7 @@ textarea { resize: vertical; min-height: 80px; }
 
     <!-- Convert panel -->
     <div class="tab-panel" id="tab-convert">
+      <p style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:10px" data-i18n="convert_tip">Convert files between formats using Pandoc or FFmpeg.</p>
       <div class="field">
         <label data-i18n="convert_file_label">File in downloads</label>
         <select id="convertFile"><option value="" data-i18n="select_file">— select file —</option></select>
@@ -935,6 +1182,17 @@ textarea { resize: vertical; min-height: 80px; }
       <span data-i18n="downloads_label">Downloads</span>
       <button class="icon-btn" id="refreshFiles" style="margin-left:auto;font-size:0.7rem" data-i18n="refresh_btn">↺ refresh</button>
     </div>
+    <div style="display:flex;gap:4px;margin-bottom:6px">
+      <input type="text" id="fileFilterInput" data-i18n-placeholder="filter_files_placeholder" placeholder="Filter…" style="flex:1;padding:5px 8px;font-size:0.72rem;min-width:0">
+      <select id="fileSortSelect" style="flex:0 0 auto;padding:5px 6px;font-size:0.72rem">
+        <option value="name-az">Name A–Z</option>
+        <option value="name-za">Name Z–A</option>
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="largest">Largest</option>
+        <option value="smallest">Smallest</option>
+      </select>
+    </div>
     <div class="dl-list" id="dlList">
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:8px 0">No files yet.</div>
     </div>
@@ -967,6 +1225,7 @@ textarea { resize: vertical; min-height: 80px; }
     <span class="viewer-title" id="viewerTitle">No file open</span>
     <a id="viewerExtLink" href="#" target="_blank" rel="noopener noreferrer"
        class="icon-btn" title="Open in new tab" style="display:none;text-decoration:none">↗</a>
+    <button class="icon-btn" id="viewerConvertBtn" style="display:none" title="Convert file">⚙</button>
     <button class="icon-btn" id="closeViewer">✕</button>
   </div>
   <div class="viewer-body" id="viewerBody">
@@ -1045,6 +1304,7 @@ textarea { resize: vertical; min-height: 80px; }
       <select id="addToCollSelect"><option value="">— select —</option></select>
     </div>
     <input type="hidden" id="addToCollHistoryId">
+    <input type="hidden" id="addToCollPendingMeta" value="">
     <div class="row2" style="margin-top:14px">
       <button class="btn btn-secondary" id="addToCollCancel" data-i18n="cancel_btn">Cancel</button>
       <button class="btn btn-primary"   id="addToCollConfirm" data-i18n="add_btn">Add</button>
@@ -1107,6 +1367,20 @@ textarea { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- ══ IN-APP LINK VIEWER ════════════════════════════════════════ -->
+<div id="linkViewerPanel" role="dialog" aria-modal="true" aria-label="Web Viewer">
+  <div class="lv-toolbar">
+    <button class="lv-nav-btn" id="linkViewerBack"   title="Back"    aria-label="Back">&#8592;</button>
+    <button class="lv-nav-btn" id="linkViewerFwd"    title="Forward" aria-label="Forward">&#8594;</button>
+    <button class="lv-nav-btn" id="linkViewerReload" title="Reload"  aria-label="Reload">&#8635;</button>
+    <span   class="lv-title"  id="linkViewerTitle"></span>
+    <input  type="url" id="linkViewerUrlBar" aria-label="URL" spellcheck="false">
+    <button class="lv-nav-btn" id="linkViewerClose"  title="Close (Esc)" aria-label="Close">&#x2715;</button>
+  </div>
+  <iframe id="linkViewerFrame" allowfullscreen sandbox="allow-forms allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+</div>
+
 <!-- ══ FILE ITEM TEMPLATE ══════════════════════════════════════════ -->
 <template id="tpl-file-item">
   <div class="dl-item">
@@ -1115,6 +1389,7 @@ textarea { resize: vertical; min-height: 80px; }
     <span class="dl-size"></span>
     <div class="dl-actions">
       <button class="icon-btn" data-action="view" title="View/Play">👁</button>
+      <button class="icon-btn" data-action="demo-ai" title="AI Analysis">✨</button>
       <a data-action="save"><button class="icon-btn" title="Save">💾</button></a>
       <button class="icon-btn del" data-action="delete-file" title="Delete">🗑</button>
     </div>
@@ -2097,5 +2372,56 @@ setInterval(renderQueuePanel, 2000);
     <button class="btn btn-primary btn-full" id="btnLogin" data-i18n="login_btn">Sign in</button>
   </div>
 </div>
+
+<!-- ══ LINK CONTEXT MENU ════════════════════════════════════════ -->
+<div id="link-context-menu" class="context-menu" style="display:none" role="menu">
+  <button class="ctx-item" data-action="ctx-open"     data-i18n="ctx_open">Open in app</button>
+  <button class="ctx-item" data-action="ctx-download" data-i18n="ctx_download">Download</button>
+  <button class="ctx-item" data-action="ctx-copy"     data-i18n="ctx_copy">Copy link</button>
+</div>
+
+<!-- ══ NOTIFICATION TRAY ════════════════════════════════════════ -->
+<div id="notification-tray" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ══ AI FAB (desktop text selection) ═════════════════════════ -->
+<button id="ai-fab">✨ Analyse</button>
+
+<!-- ══ AI BOTTOM SHEET (mobile) ════════════════════════════════ -->
+<div id="ai-bottom-sheet-overlay"></div>
+<div id="ai-bottom-sheet" role="dialog" aria-modal="true" aria-label="AI Actions">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700">AI Actions</span>
+    <button id="ai-bottom-sheet-close" class="icon-btn">✕</button>
+  </div>
+  <div id="ai-bottom-sheet-btns" style="display:flex;flex-direction:column;gap:8px"></div>
+</div>
+
+<!-- ══ MOBILE VIEWER OVERLAY ════════════════════════════════════ -->
+<div id="mobile-viewer-overlay" role="dialog" aria-modal="true" aria-label="File viewer">
+  <div class="mv-toolbar">
+    <span id="mvTitle" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <button class="icon-btn" id="mvClose">✕</button>
+  </div>
+  <div class="mv-body" id="mvBody"></div>
+</div>
+
+<!-- ══ CITATION PREVIEW MODAL ═══════════════════════════════════ -->
+<div class="modal-bg" id="citeModalBg">
+  <div class="modal" style="width:500px;max-width:95vw">
+    <h2 data-i18n="cite_modal_title">Cite</h2>
+    <div class="cite-tabs">
+      <button class="cite-tab active" data-cite-fmt="bibtex">BibTeX</button>
+      <button class="cite-tab"        data-cite-fmt="ris">RIS</button>
+      <button class="cite-tab"        data-cite-fmt="apa">APA</button>
+    </div>
+    <pre id="citeContent"></pre>
+    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-secondary" id="citeCopyBtn"     data-i18n="copy_btn">Copy</button>
+      <button class="btn btn-secondary" id="citeDownloadBtn" data-i18n="dl_bib">Download</button>
+      <button class="btn btn-secondary" id="citeCloseBtn"    data-i18n="close_btn" style="margin-left:auto">Close</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

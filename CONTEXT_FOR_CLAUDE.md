@@ -419,6 +419,23 @@ docker-compose up --build
 
 ---
 
+## GUI Reference
+
+A complete description of the user interface layout, panels, controls, modals, and interactive flows is in **`GUI_REFERENCE.md`**. Key points:
+
+- Three-column layout: collapsible sidebar (320 px) · resizable main panel · viewer panel (520 px)
+- Sidebar has six tabs: Search · URL · Convert · History · Collections · Admin
+- Main panel renders search result cards with Download / Cite / Open actions
+- Right viewer renders PDF / video / audio / text inline; auto-opens after download (configurable)
+- In-app Link Viewer: full-screen iframe overlay for publisher domains (DOI, JSTOR, Springer, etc.)
+- Interactive Demo: right-click any file or selected text for AI actions (Explain · Summary · Chat · Presentation · Flowchart) rendered in a slide-in sidebar
+- Settings modal: download dir · concurrency · language · dark mode · market segment
+- Login modal appears automatically in `multi_user` mode when no JWT is stored
+- Full EN/FR i18n; institutional branding can override accent colour and logo via `/api/status`
+- PWA-capable; service worker caches static assets (cache: `scholara-v4`)
+
+---
+
 ## Known Limitations
 
 - **Synchronous search + conversion**: all 14 search functions and `/api/convert` run synchronously in thread pool workers. Async migration is deferred.

@@ -7,6 +7,20 @@ from pathlib import Path
 from queue import Queue
 from uuid import uuid4
 
+import requests as _requests
+
+ARCHIVE_ORG_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/pdf,application/octet-stream,*/*;q=0.9",
+    "Accept-Language": "en-US,en;q=0.9,fr;q=0.8",
+    "Referer": "https://archive.org/",
+    "Connection": "keep-alive",
+}
+
 _KNOWN_DOC_EXTS = {".pdf", ".docx", ".txt", ".html", ".htm", ".md", ".epub", ".doc", ".odt"}
 _CTYPE_EXT_MAP = {
     "application/pdf": ".pdf",
@@ -177,6 +191,8 @@ def enqueue_job(url: str, meta: dict | None = None) -> str:
         "file":     "",
         "error":    "",
         "method":   "direct",
+        "offset":   0,
+        "resumed":  False,
     }
     try:
         db = get_db()
@@ -277,41 +293,96 @@ def _run_download_job(job_id: str, req_data: dict):
         # otherwise append .pdf (handles arXiv IDs like "1706.03762" where
         # pathlib misreads ".03762" as a suffix).
         suffix = Path(raw_name).suffix.lower()
-        filename = raw_name if suffix in _KNOWN_DOC_EXTS else raw_name + ".pdf"
+        filename  = raw_name if suffix in _KNOWN_DOC_EXTS else raw_name + ".pdf"
         dest_path = dl_dir / filename
-        headers   = {"User-Agent": "Mozilla/5.0"}
-        req2      = urllib.request.Request(url, headers=headers)
+        part_path = dl_dir / (filename + ".part")
         resp_ctype = ""
-        with urllib.request.urlopen(req2, timeout=60) as resp:
-            resp_ctype = resp.headers.get("Content-Type", "")
-            total      = int(resp.headers.get("Content-Length", 0))
-            downloaded = 0
-            with open(dest_path, "wb") as f:
-                while True:
-                    chunk = resp.read(65536)
+
+        # Check for a partial download to resume
+        offset  = 0
+        resumed = False
+        if part_path.exists():
+            offset  = part_path.stat().st_size
+            resumed = True
+            job["offset"]  = offset
+            job["resumed"] = True
+
+        if _host.endswith("archive.org"):
+            # archive.org blocks the default Python UA — use a cookie-primed
+            # browser session so CDN redirects are also allowed.
+            sess_headers = dict(ARCHIVE_ORG_HEADERS)
+            if offset > 0:
+                sess_headers["Range"] = f"bytes={offset}-"
+            _sess = _requests.Session()
+            _sess.headers.update(sess_headers)
+            try:
+                _sess.head("https://archive.org/", timeout=10, allow_redirects=True)
+            except Exception:
+                pass
+            _resp = _sess.get(url, stream=True, timeout=60, allow_redirects=True)
+            _resp.raise_for_status()
+            # If server ignores Range and returns 200, restart from scratch
+            if _resp.status_code == 200 and offset > 0:
+                offset = 0; resumed = False
+                part_path.unlink(missing_ok=True)
+                job["offset"] = 0; job["resumed"] = False
+            resp_ctype  = _resp.headers.get("Content-Type", "")
+            remaining   = int(_resp.headers.get("Content-Length", 0))
+            total       = offset + remaining
+            downloaded  = offset
+            file_mode   = "ab" if offset > 0 else "wb"
+            with open(part_path, file_mode) as f:
+                for chunk in _resp.iter_content(65536):
                     if not chunk:
-                        break
+                        continue
                     f.write(chunk)
                     downloaded += len(chunk)
                     if total:
                         pct = round(downloaded / total * 100, 1)
                         job["progress"] = pct
                         _db_update_job(job_id, progress=pct)
+        else:
+            req_headers = {"User-Agent": "Mozilla/5.0"}
+            if offset > 0:
+                req_headers["Range"] = f"bytes={offset}-"
+            req2 = urllib.request.Request(url, headers=req_headers)
+            with urllib.request.urlopen(req2, timeout=60) as resp:
+                # If server returns 200 (ignores Range), restart from scratch
+                if getattr(resp, "status", 200) == 200 and offset > 0:
+                    offset = 0; resumed = False
+                    part_path.unlink(missing_ok=True)
+                    job["offset"] = 0; job["resumed"] = False
+                resp_ctype = resp.headers.get("Content-Type", "")
+                remaining  = int(resp.headers.get("Content-Length", 0))
+                total      = offset + remaining
+                downloaded = offset
+                file_mode  = "ab" if offset > 0 else "wb"
+                with open(part_path, file_mode) as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            pct = round(downloaded / total * 100, 1)
+                            job["progress"] = pct
+                            _db_update_job(job_id, progress=pct)
 
         # Reject HTML responses — but first try to extract a direct PDF link
-        if _is_html_content(dest_path):
-            html_bytes = dest_path.read_bytes()
-            dest_path.unlink(missing_ok=True)
+        if _is_html_content(part_path):
+            html_bytes = part_path.read_bytes()
+            part_path.unlink(missing_ok=True)
             fallback = _find_pdf_url_in_html(html_bytes, url)
             if fallback and fallback != url:
-                # One retry with the resolved URL
+                # One retry with the resolved URL — no range on a different URL
                 try:
-                    req3 = urllib.request.Request(fallback, headers=headers)
+                    req3 = urllib.request.Request(fallback, headers={"User-Agent": "Mozilla/5.0"})
                     with urllib.request.urlopen(req3, timeout=60) as resp2:
                         resp_ctype = resp2.headers.get("Content-Type", "")
                         total      = int(resp2.headers.get("Content-Length", 0))
                         downloaded = 0
-                        with open(dest_path, "wb") as f:
+                        with open(part_path, "wb") as f:
                             while True:
                                 chunk = resp2.read(65536)
                                 if not chunk:
@@ -327,8 +398,8 @@ def _run_download_job(job_id: str, req_data: dict):
                     job["error"]  = f"Could not follow landing page to PDF: {retry_e}"
                     _db_update_job(job_id, status="error", error=job["error"])
                     return
-                if _is_html_content(dest_path):
-                    dest_path.unlink(missing_ok=True)
+                if _is_html_content(part_path):
+                    part_path.unlink(missing_ok=True)
                     job["status"] = "error"
                     job["error"]  = "Server returned an HTML page — the resource may require login or is not directly downloadable."
                     _db_update_job(job_id, status="error", error=job["error"])
@@ -340,12 +411,14 @@ def _run_download_job(job_id: str, req_data: dict):
                 return
 
         # Rename to correct extension if needed
-        correct_ext = _infer_ext(resp_ctype, dest_path)
-        if correct_ext and dest_path.suffix.lower() != correct_ext:
-            new_path = dest_path.with_suffix(correct_ext)
-            dest_path.rename(new_path)
-            dest_path = new_path
-            filename  = dest_path.name
+        correct_ext = _infer_ext(resp_ctype, part_path)
+        target_ext  = correct_ext or dest_path.suffix.lower()
+        final_dest  = dest_path if not correct_ext or dest_path.suffix.lower() == target_ext \
+                      else dest_path.with_suffix(correct_ext)
+        # Atomically rename .part → final filename
+        part_path.rename(final_dest)
+        dest_path = final_dest
+        filename  = dest_path.name
 
         job["status"]   = "done"
         job["progress"] = 100
@@ -380,6 +453,7 @@ def _run_download_job(job_id: str, req_data: dict):
     except Exception as e:
         job["status"] = "error"
         job["error"]  = str(e)
+        # Leave the .part file intact so the next attempt can resume
         _db_update_job(job_id, status="error", error=str(e))
 
 
@@ -413,6 +487,7 @@ def load_jobs_from_db():
                 "job_id": job_id, "url": url, "status": "queued",
                 "position": 0, "progress": 0, "speed": "", "eta": "",
                 "file": "", "error": "", "method": "direct",
+                "offset": 0, "resumed": False,
             }
             _dl_queue.put((job_id, {"url": url}))
     except Exception:

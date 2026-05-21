@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from auth.dependencies import get_current_user
 from db import get_db
 import repositories.collections as collections_repo
+import repositories.history as history_repo
 
 router = APIRouter(prefix="/api", tags=["collections"])
 
@@ -14,8 +15,16 @@ class CollectionCreate(BaseModel):
 
 
 class CollectionAddItem(BaseModel):
-    history_id: int
+    history_id: int | None = None
     position:   int = 0
+    # Metadata-only path (no download required)
+    title:      str = ""
+    url:        str = ""
+    source:     str = ""
+    authors:    list[str] = []
+    year:       int | None = None
+    journal:    str = ""
+    language:   str = ""
 
 
 @router.get("/collections")
@@ -81,9 +90,22 @@ def add_to_collection(id: int, req: CollectionAddItem,
     if not col:
         db.close()
         raise HTTPException(404, "Collection not found")
-    rowid = collections_repo.add_item(db, id, req.history_id, req.position)
+
+    history_id = req.history_id
+    if history_id is None:
+        # Metadata-only path: create a history entry without a file
+        if not req.url:
+            db.close()
+            raise HTTPException(422, "Provide either history_id or url+title")
+        history_id = history_repo.add_history_entry_metadata_only(
+            db, req.url, req.title, req.source or "bookmarked",
+            authors=req.authors or None, year=req.year,
+            journal=req.journal, language=req.language,
+        )
+
+    rowid = collections_repo.add_item(db, id, history_id, req.position)
     db.close()
-    return {"id": rowid, "status": "ok"}
+    return {"id": rowid, "status": "ok", "history_id": history_id}
 
 
 @router.delete("/collections/{id}/items/{item_id}")
