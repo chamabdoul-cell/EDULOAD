@@ -327,11 +327,11 @@ def _run_download_job(job_id: str, req_data: dict):
             except Exception:
                 pass
             _resp = _sess.get(url, stream=True, timeout=60, allow_redirects=True)
-            if _resp.status_code == 403:
+            if _resp.status_code in (401, 403):
                 raise Exception(
-                    "HTTP Error 403: archive.org blocked this download. "
-                    "The item may require an Internet Archive account or borrowing. "
-                    "Try opening it directly at archive.org."
+                    f"HTTP {_resp.status_code}: archive.org requires login for this item. "
+                    "It may be borrow-only (Controlled Digital Lending). "
+                    "Sign in at archive.org and borrow the book, then try again."
                 )
             _resp.raise_for_status()
             # If server ignores Range and returns 200, restart from scratch
