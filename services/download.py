@@ -308,18 +308,31 @@ def _run_download_job(job_id: str, req_data: dict):
             job["resumed"] = True
 
         if _host.endswith("archive.org"):
-            # archive.org blocks the default Python UA — use a cookie-primed
-            # browser session so CDN redirects are also allowed.
+            # archive.org blocks the default Python UA — prime cookies by
+            # visiting the item detail page before the download CDN.
             sess_headers = dict(ARCHIVE_ORG_HEADERS)
             if offset > 0:
                 sess_headers["Range"] = f"bytes={offset}-"
             _sess = _requests.Session()
             _sess.headers.update(sess_headers)
             try:
-                _sess.head("https://archive.org/", timeout=10, allow_redirects=True)
+                path_parts = urllib.parse.urlparse(url).path.strip("/").split("/")
+                # path: download/{identifier}/{filename} → item detail page
+                if len(path_parts) >= 2 and path_parts[0] == "download":
+                    item_id = path_parts[1]
+                    _sess.get(f"https://archive.org/details/{item_id}",
+                              timeout=10, allow_redirects=True)
+                else:
+                    _sess.head("https://archive.org/", timeout=10, allow_redirects=True)
             except Exception:
                 pass
             _resp = _sess.get(url, stream=True, timeout=60, allow_redirects=True)
+            if _resp.status_code == 403:
+                raise Exception(
+                    "HTTP Error 403: archive.org blocked this download. "
+                    "The item may require an Internet Archive account or borrowing. "
+                    "Try opening it directly at archive.org."
+                )
             _resp.raise_for_status()
             # If server ignores Range and returns 200, restart from scratch
             if _resp.status_code == 200 and offset > 0:
