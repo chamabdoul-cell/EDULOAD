@@ -324,6 +324,8 @@ export function openViewerUrl(url, title) {
   extLink.href = url; extLink.style.display = 'inline-flex';
   const cvBtn = $('viewerConvertBtn');
   if (cvBtn) cvBtn.style.display = 'none';
+  const dlBtn = $('viewerDlBtn');
+  if (dlBtn) { dlBtn.href = url; dlBtn.download = url.split('/').pop() || 'download'; dlBtn.style.display = 'inline-flex'; }
 
   // Use iframe for both PDF and HTML — Chrome's PDF viewer renders PDFs
   // inside iframes correctly from cross-origin sources, while <object> does not.
@@ -387,6 +389,8 @@ async function _openDesktopViewer(name, ext) {
 
   const extLink = $('viewerExtLink');
   extLink.href = url; extLink.style.display = 'inline-flex';
+  const dlBtn2 = $('viewerDlBtn');
+  if (dlBtn2) { dlBtn2.href = url; dlBtn2.download = name; dlBtn2.style.display = 'inline-flex'; }
 
   // Show convert button in viewer toolbar (3.5)
   _updateViewerConvertBtn(name, ext);
@@ -542,6 +546,8 @@ export function initDownload() {
     $('viewerIframe').src = 'about:blank';
     _clearPdfObject();
     $('viewerExtLink').style.display = 'none';
+    const dlBtn = $('viewerDlBtn');
+    if (dlBtn) { dlBtn.href = '#'; dlBtn.style.display = 'none'; }
     $('viewerPlaceholder').style.display = 'flex';
     $('viewerPlaceholder').innerHTML = `<div class="vp-icon">🔬</div><p>${t('viewer_placeholder')}</p>`;
     $('viewerTitle').textContent = t('viewer_no_file');

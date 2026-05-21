@@ -151,7 +151,7 @@ function renderResults() {
 
   grid.innerHTML = filtered.map((r, i) => {
     const openUrl  = r.url || r.link || '';
-    const pdfUrl   = r.pdf_url || '';
+    const pdfUrl   = r.pdf_url || (r.url && r.url.endsWith('.pdf') ? r.url : '');
     const ytId     = r.video_id || '';
     const authors  = Array.isArray(r.authors) ? r.authors.slice(0, 3).join(', ') : (r.authors || '');
     const journal  = Array.isArray(r.journal) ? (r.journal[0] || '') : (r.journal || '');
@@ -170,7 +170,7 @@ function renderResults() {
            <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;opacity:.85;pointer-events:none">▶</span>
          </div>`
       : '';
-    const openInViewer = !ytId && openUrl && shouldOpenViewer(openUrl);
+
     // Cite button: only show if result has an id (history entry)
     const citeBtn = r.id
       ? `<button class="card-btn" data-action="cite-result" data-id="${r.id}">${t('cite_modal_title') || 'Cite'}</button>`
@@ -190,8 +190,7 @@ function renderResults() {
            ${saveBtn}
          </div>`
       : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-           ${openInViewer ? `<button class="card-btn" data-action="open-viewer" data-url="${esc(openUrl)}" data-title="${esc(r.title || '')}">${t('open_btn')}</button>` : ''}
-           ${pdfUrl ? `<button class="card-btn dl" data-action="quick-download" data-url="${esc(pdfUrl)}">${t('download_pdf_btn')}</button>` : ''}
+           ${openUrl ? `<button class="card-btn" data-action="open-viewer" data-url="${esc(openUrl)}" data-title="${esc(r.title || '')}">${t('open_btn')}</button>` : ''}
            ${citeBtn}
            ${saveBtn}
          </div>`;

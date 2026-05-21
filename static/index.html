@@ -675,7 +675,21 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* Tab panels */
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.tab-panel.active {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.tab-panels-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
 /* ── Sidebar collapse ───────────────────────────────────────── */
 #sidebar {
   transition: width 0.25s ease, opacity 0.25s ease;
@@ -1008,11 +1022,11 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ── SIDEBAR ──────────────────────────────────────────────── -->
 <aside class="sidebar" id="sidebar">
 
-  <div class="sidebar-section">
+  <div class="sidebar-section tab-panels-wrapper">
     <div class="tabs">
       <button class="tab active" data-tab="search" data-i18n="search_tab">🔍 Search</button>
       <button class="tab" data-tab="url" data-i18n="url_tab">🔗 URL</button>
-      <button class="tab" data-tab="convert" data-i18n="convert_tab">⚙️ Convert</button>
+      <button class="tab" data-tab="convert" data-i18n="convert_tab" style="display:none">⚙️ Convert</button>
       <button class="tab" data-tab="history" data-i18n="history_tab">📋 History</button>
       <button class="tab" data-tab="collections" data-i18n="collections_tab">🗂 Collections</button>
       <button class="tab" data-tab="admin" id="adminTab" style="display:none" data-i18n="admin_tab">📊 Admin</button>
@@ -1226,6 +1240,9 @@ textarea { resize: vertical; min-height: 80px; }
     <a id="viewerExtLink" href="#" target="_blank" rel="noopener noreferrer"
        class="icon-btn" title="Open in new tab" style="display:none;text-decoration:none">↗</a>
     <button class="icon-btn" id="viewerConvertBtn" style="display:none" title="Convert file">⚙</button>
+    <a id="viewerDlBtn" class="icon-btn" href="#" download
+       style="display:none;text-decoration:none"
+       data-i18n-title="viewer_download_btn" title="Télécharger / Download">⬇</a>
     <button class="icon-btn" id="closeViewer">✕</button>
   </div>
   <div class="viewer-body" id="viewerBody">

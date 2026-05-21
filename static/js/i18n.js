@@ -111,6 +111,7 @@ export const TRANSLATIONS = {
     // 3.5 Convert in viewer
     convert_in_viewer:  "Convert",
     convert_tip:        "Tip: you can also convert files directly from the viewer toolbar.",
+    viewer_download_btn: "Download",
   },
   fr: {
     tagline:             "Le Savoir Ouvert, Partout",
@@ -223,6 +224,7 @@ export const TRANSLATIONS = {
     // 3.5 Convert in viewer
     convert_in_viewer:  "Convertir",
     convert_tip:        "Astuce : vous pouvez aussi convertir depuis la barre d'outils du visualiseur.",
+    viewer_download_btn: "Télécharger",
   }
 };
 
