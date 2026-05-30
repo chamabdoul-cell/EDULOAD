@@ -26,6 +26,12 @@ config/.env
 
 # Downloads / generated files
 downloads/
+for_claude_review/
+for_claude_review.zip
+
+# Generated docs
+Scholara_User_Manual.docx
+Scholara_User_Manual.pdf
 
 # Logs
 *.log

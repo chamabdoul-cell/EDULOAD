@@ -12,11 +12,14 @@ Use this document to get up to speed on Scholara before a technical conversation
 
 Core capabilities:
 - Search across up to 14 academic sources with a natural-language query (bilingual EN/FR)
-- Download PDFs and documents from a whitelisted set of open-access domains
+- Download PDFs and documents from a whitelisted set of open-access domains; interrupted downloads resume automatically via `.part` files + Range headers
 - Export citations in BibTeX, RIS, or APA format
 - Convert files between formats (PDF↔DOCX, video→audio, etc.)
 - Organise downloads with history, tags, and named collections — shareable with an institution
+- Bookmark search results directly to a collection without downloading (metadata-only)
 - Interactive AI Demo: right-click any file or selected text for explain / summary / chat / presentation / flowchart
+- In-app Link Viewer: publisher/DOI URLs open in an iframe panel instead of a new tab
+- Notification tray for background download events
 - Run as a PWA installable on mobile
 - Deploy in `single_user` mode (no auth) or `multi_user` mode (JWT auth, roles, audit logging)
 
@@ -49,10 +52,24 @@ Served at `http://127.0.0.1:7860` by default.
 adm_app/
 ├── app.py                   # FastAPI entry point — startup, /api/status, PWA icons
 ├── db.py                    # get_db() → sqlite3.Connection with row_factory
+├── CLAUDE.md                # Claude Code instructions (auto-loaded every session)
 ├── requirements.txt
+│
+├── .claude/                 # Claude Code project configuration
+│   ├── settings.json        # Hooks: pre-commit safety gate (fires before every Bash call)
+│   ├── settings.local.json  # Personal permissions (not committed)
+│   ├── agents/
+│   │   ├── codebase-researcher.md     # Haiku, read-only — maps files+patterns before coding
+│   │   ├── implementation-validator.md # Sonnet, read-only — security+arch audit after coding
+│   │   └── pr-reviewer.md             # Sonnet, read-only — full diff review before commit
+│   ├── skills/
+│   │   └── build-scholara-feature/SKILL.md  # Enforces repo→service→router→test build order
+│   └── hooks/
+│       └── pre-commit-safety.sh  # Blocks .env, *.key, scholara.db from being committed
 ├── scholara.db              # SQLite — created on first run
 ├── Dockerfile               # python:3.11-slim, installs ffmpeg, exposes 7860
 ├── docker-compose.yml       # scholara + ollama sidecar
+├── generate_manual.py       # Generates Scholara_User_Manual.docx (run on demand)
 ├── downloads/               # Default download folder (configurable)
 │
 ├── auth/
@@ -66,7 +83,7 @@ adm_app/
 │   ├── search.py            # /api/search, /api/nl_search
 │   ├── download.py          # /api/download, /api/queue, /api/progress
 │   ├── history.py           # /api/history
-│   ├── collections.py       # /api/collections (+ /shared, /{id}/share)
+│   ├── collections.py       # /api/collections (+ /shared, /{id}/share, metadata-only add)
 │   ├── files.py             # /api/file
 │   ├── convert.py           # /api/convert
 │   ├── settings.py          # /api/settings
@@ -84,8 +101,10 @@ adm_app/
 │   │                        # get_collection_items, add_item, remove_item, delete_collection,
 │   │                        # share_collection, list_shared_collections
 │   ├── queue.py             # get_job, list_jobs, cancel_job
-│   └── history.py           # get_history, add_history_entry, tag_entry, delete_entry,
-│                            # get_entry, top_sources
+│   └── history.py           # get_history, add_history_entry, add_history_entry_metadata_only(),
+│                            # tag_entry, delete_entry, get_entry, top_sources
+│                            # • add_history_entry_metadata_only: bookmarks a search result
+│                            #   (url + title + source) without a local file
 │
 ├── schemas/
 │   └── auth.py              # LoginRequest, RegisterRequest, TokenResponse, UserOut
@@ -96,6 +115,8 @@ adm_app/
 │   ├── rate_limit.py        # check(key, limit, window_secs), apply(request, user), reset()
 │   ├── convert.py           # do_convert() — 5-layer hardened: path, size, MIME, timeout, subprocess
 │   └── download.py          # enqueue_job(), get_download_dir(), load_jobs_from_db(), workers
+│                            # • resumes interrupted downloads via .part files + Range headers
+│                            # • archive.org gets a browser-UA session to bypass CDN blocks
 │                            # • appends .pdf when URL suffix isn't a known doc ext (arXiv IDs)
 │                            # • infers true ext from Content-Type + magic bytes (_infer_ext)
 │                            # • rejects HTML responses (login walls) with HTTP 422
@@ -129,30 +150,37 @@ adm_app/
 ├── static/
 │   ├── index.html           # SPA shell — all HTML structure, CSS, i18n translations
 │   ├── manifest.json
-│   ├── sw.js                # Service worker (cache: scholara-v4)
+│   ├── sw.js                # Service worker (cache: scholara-v5; includes viewer.js + mermaid)
 │   ├── icon-192.png
 │   ├── icon-512.png
 │   └── js/
 │       ├── app.js           # Entry point — wires all modules, settings, tabs, branding
 │       ├── i18n.js          # TRANSLATIONS, currentLang, t(), applyTranslations(), setLang()
 │       ├── auth.js          # initAuth(), showLoginModal(), token management, setMultiUser()
-│       ├── api.js           # apiFetch(), $(), fmtBytes(), extIcon(), esc(), showMsg()
-│       ├── download.js      # loadStatus() → returns data; renderFileList(), trackProgress(),
-│       │                    # renderQueuePanel(), openViewer(), initDownload()
-│       ├── search.js        # quickDownload(), initSearch()
+│       ├── api.js           # apiFetch(), $(), fmtBytes(), extIcon(), esc(), showMsg(),
+│       │                    # notify() (notification tray), VIEWABLE_EXTS
+│       ├── viewer.js        # VIEWER_DOMAINS, isViewerDomain(), shouldOpenViewer(),
+│       │                    # openViewer() (iframe link viewer), closeViewer(), initViewer()
+│       ├── download.js      # loadStatus(), renderFileList(), trackProgress(),
+│       │                    # renderQueuePanel(), openViewerUrl() (opens URL in right panel),
+│       │                    # file filter/sort controls, tool popovers, initDownload()
+│       ├── search.js        # quickDownload(), initSearch(); result cards use openViewerUrl()
+│       │                    # and _downloadDirect(); recent searches (localStorage);
+│       │                    # citation preview modal (tabbed BibTeX/RIS/APA);
+│       │                    # save-to-collection from results
 │       ├── collections.js   # loadHistory(), loadCollections(), initCollections()
-│       └── demo.js          # initDemo(), launchDemoAction(), showDemoContextMenu()
-│                            # — context menu + sidebar panel for all 5 AI actions
+│       ├── demo.js          # initDemo(), launchDemoAction(), showDemoContextMenu(),
+│       │                    # openDemoForFile() — AI FAB + bottom sheet use static HTML
+│       │                    # elements (#ai-fab, #ai-bottom-sheet)
+│       └── vendor/
+│           └── mermaid.min.js  # Bundled locally (not CDN) for flowchart rendering
 │
 └── tests/
     ├── conftest.py          # temp_db fixture (monkeypatches db.DB_PATH); all table DDL
-    ├── test_phase1.py       # 18 tests — router extraction
     ├── test_phase2.py       # 22 tests — auth, rate limit, quota
     ├── test_phase3.py       # 20 tests — conversion sandboxing
     ├── test_phase4.py       # 23 tests — repository layer, no-raw-SQL structural check
-    ├── test_phase5.py       # 21 tests — frontend auth (login modal, token refresh)
     ├── test_phase6.py       # 18 tests — dedup, rerank, search headers
-    ├── test_phase7.py       # 15 tests — JS module structure
     ├── test_phase8.py       # 14 tests — shared collections, analytics, branding
     ├── test_demo.py         # 21 tests — /api/extract, /api/demo
     ├── test_downloader.py
@@ -225,6 +253,9 @@ Every function in `repositories/` takes `db: sqlite3.Connection` as its first ar
 
 When `lang == "fr"`, French sources (`FR_SOURCES`) are auto-injected at the front of the source list so callers don't need to request them explicitly.
 
+### Download Resume
+`services/download.py` saves partial content to `<filename>.part` while downloading. On restart, it reads the file size, sends a `Range: bytes=<offset>-` header, and appends. If the server returns 200 (ignores Range), the partial file is discarded and the download restarts from zero. archive.org uses a browser-UA session to bypass CDN 401/403 blocks.
+
 ### Demo Prompt Substitution
 `prompts/demo/*.txt` use `{text}`, `{language}`, `{message}` as placeholders. Substitution is done via `.replace()`, **not** `str.format()`, to avoid conflicts with JSON curly braces in `presentation.txt`.
 
@@ -233,10 +264,11 @@ When `lang == "fr"`, French sources (`FR_SOURCES`) are auto-injected at the fron
 i18n.js       (no imports)
 auth.js    ← i18n.js
 api.js     ← auth.js, i18n.js
-download.js← api.js, i18n.js
-search.js  ← api.js, i18n.js, download.js
-collections← api.js, i18n.js, download.js
+viewer.js  ← i18n.js
 demo.js    ← api.js, i18n.js
+download.js← api.js, i18n.js, viewer.js, demo.js
+search.js  ← api.js, i18n.js, download.js, viewer.js
+collections← api.js, i18n.js, download.js
 app.js     ← all modules
 ```
 No circular dependencies. `auth.js` uses bare `fetch()` for login (not `apiFetch()`) to avoid the cycle.
@@ -363,7 +395,7 @@ Rate limits: extract 10/min, demo 20/min. Text cap: demo 12 000 chars, raw text 
 | GET | `/api/collections/shared` | Shared collections for user's institution |
 | GET | `/api/collections/{id}` | Collection + items |
 | POST | `/api/collections/{id}/share` | Share with user's institution |
-| POST | `/api/collections/{id}/items` | Add item `{history_id, position}` |
+| POST | `/api/collections/{id}/items` | Add item `{history_id?, position, url?, title?, source?}` — history_id OR url+title+source (metadata-only bookmark) |
 | DELETE | `/api/collections/{id}/items/{item_id}` | Remove item |
 | DELETE | `/api/collections/{id}` | Delete |
 
@@ -381,10 +413,8 @@ Note: `/api/collections/shared` must be registered **before** `/api/collections/
 ## Running the App
 
 ```bash
-# Python (system Python 3.14)
-python3.14 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# Uses the Python 3.14 venv at /home/chama/my-venv
+source /home/chama/my-venv/bin/activate
 python app.py
 # Opens http://127.0.0.1:7860 automatically
 
@@ -394,8 +424,6 @@ APP_MODE=multi_user SECRET_KEY=your-secret python app.py
 # Docker
 docker-compose up --build
 ```
-
-**venv note:** The `my-venv` at `/home/chama/my-venv` uses Python 3.14 packages and is the active venv for this project. Do not use the system Python directly.
 
 ---
 
@@ -416,6 +444,10 @@ docker-compose up --build
 | Phase 8 | `a04fb47` | Institutional: shared collections, analytics, branding |
 | Demo | `065d57e` | Interactive Demo: extract, explain, summary, chat, presentation, flowchart |
 | Bug fixes | `3a98805` | arXiv extension fix, HTML rejection, French detection 3-tier, lifespan handler, convert alias |
+| UX overhaul | `0b1ca80` | viewer.js module, resume downloads (.part+Range), result card UX, mobile layout, notification tray, citation modal, recent searches, metadata-only collection bookmarks |
+| Bug fixes v2 | `be8ec26` | archive.org 403 handling; PDF viewer switched to iframe |
+| Bug fixes v3 | `5774607` | archive.org CDN 401 → friendly borrow message |
+| Bug fixes v4 | `cc9019b` | Sidebar scroll fix; Open btn always visible; Download moved to viewer toolbar; Convert tab hidden |
 
 ---
 
@@ -424,23 +456,24 @@ docker-compose up --build
 A complete description of the user interface layout, panels, controls, modals, and interactive flows is in **`GUI_REFERENCE.md`**. Key points:
 
 - Three-column layout: collapsible sidebar (320 px) · resizable main panel · viewer panel (520 px)
-- Sidebar has six tabs: Search · URL · Convert · History · Collections · Admin
-- Main panel renders search result cards with Download / Cite / Open actions
-- Right viewer renders PDF / video / audio / text inline; auto-opens after download (configurable)
-- In-app Link Viewer: full-screen iframe overlay for publisher domains (DOI, JSTOR, Springer, etc.)
-- Interactive Demo: right-click any file or selected text for AI actions (Explain · Summary · Chat · Presentation · Flowchart) rendered in a slide-in sidebar
+- Sidebar has six tabs: Search · URL · Convert (hidden) · History · Collections · Admin
+- Main panel renders search result cards with Cite / Open / "+ Collection" actions; Download button is in the viewer toolbar
+- Right viewer renders PDF (iframe) / video / audio / text inline; auto-opens after download (configurable)
+- In-app Link Viewer: full-screen iframe overlay for publisher domains (DOI, JSTOR, Springer, etc.) via `viewer.js`
+- Interactive Demo: right-click any file or selected text for AI actions (Explain · Summary · Chat · Presentation · Flowchart) rendered in a slide-in sidebar; AI FAB + bottom sheet use static HTML elements
+- Notification tray: toast messages for background download events
 - Settings modal: download dir · concurrency · language · dark mode · market segment
 - Login modal appears automatically in `multi_user` mode when no JWT is stored
 - Full EN/FR i18n; institutional branding can override accent colour and logo via `/api/status`
-- PWA-capable; service worker caches static assets (cache: `scholara-v4`)
+- PWA-capable; service worker (`scholara-v5`) caches static assets including `viewer.js` and `mermaid.min.js`
 
 ---
 
 ## Known Limitations
 
-- **Synchronous search + conversion**: all 14 search functions and `/api/convert` run synchronously in thread pool workers. Async migration is deferred.
-- **No download resume**: interrupted downloads must restart from the beginning.
-- **Mermaid.js from CDN**: the flowchart renderer loads Mermaid lazily from `cdnjs.cloudflare.com`. It is not cached by the service worker — requires internet for first flowchart request.
-- **5 pre-existing test failures**: 3 asyncio `get_event_loop()` incompatibilities (Python 3.14 removed this API); 2 EduLoad-era tests expecting `youtube`/`duckduckgo` sources. These are not regressions.
+- **Synchronous search + conversion**: all search functions and `/api/convert` run synchronously in thread pool workers. Async migration is deferred.
+- **Mermaid.js bundled locally**: `static/js/vendor/mermaid.min.js` is served from the project and cached by the service worker — no CDN dependency for flowcharts.
+- **3 pre-existing test failures**: asyncio `get_event_loop()` incompatibilities (Python 3.14 removed this API). Not regressions — do not fix without a dedicated task.
+- **2 EduLoad-era test failures**: tests in `test_downloader.py` / `test_gn_search.py` expecting `youtube`/`duckduckgo` sources. Not regressions.
 - **CORE search**: silently returns `[]` if `CORE_API_KEY` is not set.
 - **`internet_archive` and `archive`**: both keys map to `_search_archive` for compatibility.
